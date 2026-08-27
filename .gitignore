@@ -1,0 +1,25 @@
+# dependencies
+/node_modules
+/.pnpm-store
+
+# Next.js
+/.next
+/out
+
+# generated Prisma client
+/src/generated/prisma
+
+# tests
+/playwright-report
+/test-results
+/coverage
+
+# environment and secrets
+.env
+.env.*
+!.env.example
+
+# local tooling
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts

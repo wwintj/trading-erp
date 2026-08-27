@@ -21,3 +21,9 @@ test("unauthenticated root redirects to login", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/login$/);
 });
+
+test("unauthenticated account redirects to login", async ({ page }) => {
+  await page.goto("/account");
+
+  await expect(page).toHaveURL(/\/login$/);
+});

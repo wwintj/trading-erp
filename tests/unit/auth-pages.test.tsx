@@ -17,11 +17,18 @@ vi.mock("@/lib/auth-flow", () => ({
   signOutCurrentSession: vi.fn(),
 }));
 
+vi.mock("@/lib/password-change-flow", () => ({
+  changeCurrentPassword: vi.fn(),
+  PASSWORD_MIN_LENGTH: 8,
+  PASSWORD_MAX_LENGTH: 128,
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 
+import AccountPage from "@/app/account/page";
 import DashboardPage from "@/app/dashboard/page";
 import LoginPage from "@/app/login/page";
 import Home from "@/app/page";
@@ -47,6 +54,13 @@ describe("authentication pages", () => {
     mocks.getCurrentSession.mockResolvedValue(null);
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT:/login");
+    expect(mocks.redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects an unauthenticated account request to login", async () => {
+    mocks.getCurrentSession.mockResolvedValue(null);
+
+    await expect(AccountPage()).rejects.toThrow("NEXT_REDIRECT:/login");
     expect(mocks.redirect).toHaveBeenCalledWith("/login");
   });
 
@@ -100,5 +114,26 @@ describe("authentication pages", () => {
     expect(html).toContain("admin@example.com");
     expect(html).toContain("admin");
     expect(html).toContain("Sign Out");
+    expect(html).toContain("Account / Change Password");
+  });
+
+  it("renders the account page and password bounds for an authenticated user", async () => {
+    mocks.getCurrentSession.mockResolvedValue({
+      user: {
+        id: "user-id",
+        name: "Admin User",
+        email: "admin@example.com",
+        role: "admin",
+      },
+    });
+
+    const html = renderToStaticMarkup(await AccountPage());
+
+    expect(html).toContain("Change Password");
+    expect(html).toContain("Current password");
+    expect(html).toContain("New password");
+    expect(html).toContain("Confirm new password");
+    expect(html).toContain('minLength="8"');
+    expect(html).toContain('maxLength="128"');
   });
 });

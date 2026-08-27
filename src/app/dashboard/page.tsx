@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentSession } from "@/lib/auth-session";
 import { getServerEnv } from "@/lib/env";
@@ -43,6 +45,11 @@ export default async function DashboardPage() {
               <dd>{role}</dd>
             </div>
           </dl>
+          <div className="mt-6">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/account">Account / Change Password</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </main>

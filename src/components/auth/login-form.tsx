@@ -47,7 +47,7 @@ export function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
-          minLength={15}
+          minLength={8}
           maxLength={128}
           required
           disabled={pending}

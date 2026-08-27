@@ -7,7 +7,7 @@ describe("Better Auth configuration", () => {
     expect(auth.options.emailAndPassword).toMatchObject({
       enabled: true,
       disableSignUp: true,
-      minPasswordLength: 15,
+      minPasswordLength: 8,
       maxPasswordLength: 128,
     });
     expect(auth.options).not.toHaveProperty("session.cookieCache.enabled", true);

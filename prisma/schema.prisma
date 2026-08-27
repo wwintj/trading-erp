@@ -76,3 +76,20 @@ model Verification {
   @@index([identifier(length: 191)])
   @@map("verification")
 }
+
+model Company {
+  id                String   @id @default(cuid())
+  legalName         String   @db.VarChar(255)
+  shortName         String?  @db.VarChar(255)
+  unifiedCreditCode String?  @db.VarChar(64)
+  contactName       String?  @db.VarChar(128)
+  phone             String?  @db.VarChar(64)
+  email             String?  @db.VarChar(255)
+  address           String?  @db.Text
+  bankName          String?  @db.VarChar(255)
+  bankAccount       String?  @db.VarChar(128)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("company")
+}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
+  getCompanySingleton: vi.fn(),
   redirect: vi.fn((destination: string) => {
     throw new Error(`NEXT_REDIRECT:${destination}`);
   }),
@@ -23,12 +24,21 @@ vi.mock("@/lib/password-change-flow", () => ({
   PASSWORD_MAX_LENGTH: 128,
 }));
 
+vi.mock("@/lib/company.server", () => ({
+  getCompanySingleton: mocks.getCompanySingleton,
+}));
+
+vi.mock("@/app/company/actions", () => ({
+  saveCompanyAction: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 import AccountPage from "@/app/account/page";
+import CompanyPage from "@/app/company/page";
 import DashboardPage from "@/app/dashboard/page";
 import LoginPage from "@/app/login/page";
 import Home from "@/app/page";
@@ -62,6 +72,14 @@ describe("authentication pages", () => {
 
     await expect(AccountPage()).rejects.toThrow("NEXT_REDIRECT:/login");
     expect(mocks.redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects an unauthenticated company request to login", async () => {
+    mocks.getCurrentSession.mockResolvedValue(null);
+
+    await expect(CompanyPage()).rejects.toThrow("NEXT_REDIRECT:/login");
+    expect(mocks.redirect).toHaveBeenCalledWith("/login");
+    expect(mocks.getCompanySingleton).not.toHaveBeenCalled();
   });
 
   it("redirects an authenticated visitor away from login", async () => {
@@ -114,6 +132,7 @@ describe("authentication pages", () => {
     expect(html).toContain("admin@example.com");
     expect(html).toContain("admin");
     expect(html).toContain("Sign Out");
+    expect(html).toContain('href="/company"');
     expect(html).toContain("Account / Change Password");
   });
 
@@ -135,5 +154,47 @@ describe("authentication pages", () => {
     expect(html).toContain("Confirm new password");
     expect(html).toContain('minLength="8"');
     expect(html).toContain('maxLength="128"');
+  });
+
+  it("renders the create form when no Company exists for an admin", async () => {
+    mocks.getCurrentSession.mockResolvedValue({
+      user: { email: "admin@example.com", role: "admin" },
+    });
+    mocks.getCompanySingleton.mockResolvedValue(null);
+
+    const html = renderToStaticMarkup(await CompanyPage());
+
+    expect(html).toContain("Create the single Company record");
+    expect(html).toContain("Legal name / 公司全称");
+    expect(html).toContain("Unified social credit code / 统一社会信用代码");
+    expect(html).toContain("Create Company");
+  });
+
+  it("renders existing Company values read-only for a user", async () => {
+    mocks.getCurrentSession.mockResolvedValue({
+      user: { email: "user@example.com", role: "user" },
+    });
+    mocks.getCompanySingleton.mockResolvedValue({
+      id: "company-1",
+      legalName: "天津纬信科技有限公司",
+      shortName: "纬信科技",
+      unifiedCreditCode: null,
+      contactName: "Test Contact",
+      phone: null,
+      email: "company@example.com",
+      address: null,
+      bankName: null,
+      bankAccount: null,
+      createdAt: new Date("2026-08-28T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-28T00:00:00.000Z"),
+    });
+
+    const html = renderToStaticMarkup(await CompanyPage());
+
+    expect(html).toContain("天津纬信科技有限公司");
+    expect(html).toContain("纬信科技");
+    expect(html).toContain("company@example.com");
+    expect(html).not.toContain("Save Company");
+    expect(html).not.toContain("Create Company");
   });
 });

@@ -1,6 +1,6 @@
 # Trading ERP
 
-Trading ERP is currently at **Step 0.2.1: Change Password**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, and authenticated self-service password changes. It intentionally contains no ERP business models or public user-management UI.
+Trading ERP is currently at **Step 0.3: Company**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, and Company as its first ERP master-data module.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ Trading ERP is currently at **Step 0.2.1: Change Password**. It provides a Next.
    docker compose up -d mysql
    ```
 
-5. Apply the authentication migration and generate the Prisma client. The schema intentionally contains only Better Auth models:
+5. Apply the committed migrations and generate the Prisma client:
 
    ```bash
    pnpm db:migrate
@@ -62,6 +62,8 @@ Open `http://localhost:3000`. The root route redirects unauthenticated visitors 
 Public sign-up is disabled. Administrators create accounts through Better Auth's server-side Admin plugin tooling; there is no public registration flow or user-management screen in this step.
 
 Authenticated users can open `/account` from the dashboard to change their password. A successful change revokes their other sessions while preserving the current session. Passwords must contain 8–128 characters; no composition rules are imposed.
+
+Authenticated users can view the single Company configuration at `/company`. Administrators can create or edit it; regular users have read-only access.
 
 ## Production migration
 
@@ -96,7 +98,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account redirects. Real sign-in, session persistence, sign-out, password change, and readiness integration must be verified against MySQL after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, and readiness integration must be verified against MySQL after deployment.
 
 ## Database development
 

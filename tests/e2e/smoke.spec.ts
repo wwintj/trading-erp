@@ -27,3 +27,10 @@ test("unauthenticated account redirects to login", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/login$/);
 });
+
+test("unauthenticated company redirects to login", async ({ page }) => {
+  await page.goto("/company");
+
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+});

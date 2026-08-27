@@ -45,7 +45,10 @@ export default async function DashboardPage() {
               <dd>{role}</dd>
             </div>
           </dl>
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/company">Company</Link>
+            </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/account">Account / Change Password</Link>
             </Button>

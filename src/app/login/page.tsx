@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Button } from "@/components/ui/button";
+import { LoginForm } from "@/components/auth/login-form";
 import {
   Card,
   CardContent,
@@ -8,15 +8,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getCurrentSession } from "@/lib/auth-session";
 import { getServerEnv } from "@/lib/env";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Sign In",
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await getCurrentSession();
+
+  if (session) {
+    redirect("/dashboard");
+  }
+
   const { APP_NAME } = getServerEnv();
 
   return (
@@ -25,28 +31,10 @@ export default function LoginPage() {
         <CardHeader>
           <p className="text-sm font-medium text-neutral-500">{APP_NAME}</p>
           <CardTitle>Sign In</CardTitle>
-          <CardDescription>Authentication will be connected in the next project step.</CardDescription>
+          <CardDescription>Use your administrator-provided account to continue.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" disabled />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                disabled
-              />
-            </div>
-            <Button className="w-full" type="submit" disabled>
-              Sign In
-            </Button>
-          </form>
+          <LoginForm />
         </CardContent>
       </Card>
     </main>

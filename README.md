@@ -1,6 +1,6 @@
 # Trading ERP
 
-Trading ERP is currently at **Step 0.1: Project Bootstrap**. This baseline provides a Next.js application, a Prisma connection layer, MySQL development infrastructure, health endpoints, and placeholder pages. It intentionally contains no authentication or ERP business models.
+Trading ERP is currently at **Step 0.2: Minimal Authentication**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, and the built-in `admin`/`user` roles. It intentionally contains no ERP business models or public user-management UI.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ Trading ERP is currently at **Step 0.1: Project Bootstrap**. This baseline provi
    nvm use
    ```
 
-2. Create local environment configuration and replace the development-only passwords:
+2. Create local environment configuration. Replace the development-only database passwords and generate a private Better Auth secret of at least 32 characters:
 
    ```bash
    cp .env.example .env
@@ -34,25 +34,42 @@ Trading ERP is currently at **Step 0.1: Project Bootstrap**. This baseline provi
    docker compose up -d mysql
    ```
 
-5. Generate the Prisma client. The schema intentionally has no business models yet:
-
-   ```bash
-   pnpm db:generate
-   ```
-
-   When a later step introduces a schema migration, run:
+5. Apply the authentication migration and generate the Prisma client. The schema intentionally contains only Better Auth models:
 
    ```bash
    pnpm db:migrate
+   pnpm db:generate
    ```
 
-6. Start Next.js:
+6. Create the first administrator with Better Auth's official version-matched CLI. Omit `--password` so it is entered interactively and never stored in shell history:
+
+   ```bash
+   pnpm dlx auth@1.7.1 create-admin \
+     --config src/lib/auth-config.ts \
+     --email admin@example.com \
+     --name "Admin" \
+     --role admin
+   ```
+
+7. Start Next.js:
 
    ```bash
    pnpm dev
    ```
 
-Open `http://localhost:3000`. The root route redirects to `/dashboard`.
+Open `http://localhost:3000`. The root route redirects unauthenticated visitors to `/login` and authenticated users to `/dashboard`.
+
+Public sign-up is disabled. Administrators create accounts through Better Auth's server-side Admin plugin tooling; there is no public registration flow or user-management screen in this step.
+
+## Production migration
+
+Production and staging deployments must apply committed migrations with:
+
+```bash
+pnpm db:deploy
+```
+
+Do not use `prisma db push` or `prisma migrate dev` as a production migration strategy.
 
 ## Health endpoints
 
@@ -76,6 +93,8 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 ```bash
 pnpm exec playwright install chromium
 ```
+
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard redirect. Real sign-in, session persistence, sign-out, and readiness integration must be verified against MySQL after deployment.
 
 ## Database development
 

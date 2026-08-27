@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 
 import { saveCompanyAction } from "@/app/company/actions";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   INITIAL_COMPANY_FORM_STATE,
   type CompanyInput,
 } from "@/lib/company";
+import { notifyCompanySave } from "@/lib/company-feedback";
 
 type CompanyFormProps = {
   companyId: string | null;
@@ -23,6 +24,10 @@ export function CompanyForm({ companyId, initialValues }: CompanyFormProps) {
     saveCompanyAction,
     INITIAL_COMPANY_FORM_STATE,
   );
+
+  useEffect(() => {
+    notifyCompanySave(state);
+  }, [state]);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -164,19 +169,7 @@ export function CompanyForm({ companyId, initialValues }: CompanyFormProps) {
         <FieldError id="bank-account-error" message={state.fieldErrors?.bankAccount} />
       </div>
 
-      <p
-        className={
-          state.status === "error"
-            ? "min-h-5 text-sm text-red-700"
-            : "min-h-5 text-sm text-green-700"
-        }
-        role={state.status === "error" ? "alert" : "status"}
-        aria-live="polite"
-      >
-        {state.message}
-      </p>
-
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" variant="default" disabled={pending}>
         {pending ? "Saving…" : companyId ? "Save Company" : "Create Company"}
       </Button>
     </form>

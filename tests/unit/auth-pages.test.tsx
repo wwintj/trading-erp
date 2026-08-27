@@ -197,4 +197,31 @@ describe("authentication pages", () => {
     expect(html).not.toContain("Save Company");
     expect(html).not.toContain("Create Company");
   });
+
+  it("renders Save Company as the primary action for an admin", async () => {
+    mocks.getCurrentSession.mockResolvedValue({
+      user: { email: "admin@example.com", role: "admin" },
+    });
+    mocks.getCompanySingleton.mockResolvedValue({
+      id: "company-1",
+      legalName: "天津纬信科技有限公司",
+      shortName: null,
+      unifiedCreditCode: null,
+      contactName: null,
+      phone: null,
+      email: null,
+      address: null,
+      bankName: null,
+      bankAccount: null,
+      createdAt: new Date("2026-08-28T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-28T00:00:00.000Z"),
+    });
+
+    const html = renderToStaticMarkup(await CompanyPage());
+    const saveButton = html.match(/<button[^>]*>Save Company<\/button>/)?.[0];
+
+    expect(saveButton).toContain("bg-neutral-950");
+    expect(saveButton).toContain("text-white");
+    expect(saveButton).not.toContain("bg-white");
+  });
 });

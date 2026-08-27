@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 APP_DIR="/opt/trading-erp"
 PORT="3100"
@@ -20,7 +21,9 @@ cleanup_files() {
         /tmp/trading-erp-auth-login.json \
         /tmp/trading-erp-auth-session.json \
         /tmp/trading-erp-auth-signout.json \
-        /tmp/trading-erp-auth-session-after-signout.json
+        /tmp/trading-erp-auth-session-after-signout.json \
+        /tmp/trading-erp-live.json \
+        /tmp/trading-erp-ready.json
 }
 
 trap cleanup_files EXIT
@@ -155,7 +158,6 @@ if [ "$ADMIN_CREATED" -eq 1 ]; then
   echo
 
   COOKIE_JAR="/tmp/trading-erp-auth-cookies.txt"
-  chmod 700 /tmp
   rm -f "$COOKIE_JAR"
 
   LOGIN_CODE="$({

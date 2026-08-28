@@ -47,6 +47,9 @@ export default async function DashboardPage() {
           </dl>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button variant="outline" size="sm" asChild>
+              <Link href="/products">产品</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <Link href="/suppliers">Suppliers</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>

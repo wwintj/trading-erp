@@ -132,6 +132,8 @@ describe("authentication pages", () => {
     expect(html).toContain("admin@example.com");
     expect(html).toContain("admin");
     expect(html).toContain("Sign Out");
+    expect(html).toContain('href="/products"');
+    expect(html).toContain("产品");
     expect(html).toContain('href="/suppliers"');
     expect(html).toContain('href="/company"');
     expect(html).toContain("Account / Change Password");

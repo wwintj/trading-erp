@@ -112,3 +112,16 @@ model Supplier {
 
   @@map("supplier")
 }
+
+model Product {
+  id            String   @id @default(cuid())
+  code          String   @unique @db.VarChar(64)
+  name          String   @db.VarChar(255)
+  specification String?  @db.VarChar(255)
+  unit          String   @db.VarChar(32)
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("product")
+}

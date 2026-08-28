@@ -90,6 +90,7 @@ model Company {
   bankAccount       String?  @db.VarChar(128)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  purchaseContracts PurchaseContract[]
 
   @@map("company")
 }
@@ -109,6 +110,7 @@ model Supplier {
   notes             String?  @db.Text
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  purchaseContracts PurchaseContract[]
 
   @@map("supplier")
 }
@@ -122,6 +124,77 @@ model Product {
   notes         String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  purchaseContractItems PurchaseContractItem[]
 
   @@map("product")
+}
+
+enum PurchaseContractStatus {
+  DRAFT
+  FINAL
+  CANCELLED
+}
+
+model PurchaseContract {
+  id                      String                 @id @default(cuid())
+  contractNo              String                 @unique @db.VarChar(64)
+  status                  PurchaseContractStatus @default(DRAFT)
+  signingDate             DateTime               @db.Date
+  signingPlace            String?                @db.VarChar(255)
+  companyId               String
+  supplierId              String
+  buyerLegalName          String                 @db.VarChar(255)
+  buyerUnifiedCreditCode  String?                @db.VarChar(64)
+  buyerContactName        String?                @db.VarChar(128)
+  buyerPhone              String?                @db.VarChar(64)
+  buyerAddress            String?                @db.Text
+  buyerBankName           String?                @db.VarChar(255)
+  buyerBankAccount        String?                @db.VarChar(128)
+  sellerLegalName         String                 @db.VarChar(255)
+  sellerUnifiedCreditCode String?                @db.VarChar(64)
+  sellerContactName       String?                @db.VarChar(128)
+  sellerPhone             String?                @db.VarChar(64)
+  sellerAddress           String?                @db.Text
+  sellerBankName          String?                @db.VarChar(255)
+  sellerBankAccount       String?                @db.VarChar(128)
+  deliveryDate            DateTime?              @db.Date
+  deliveryAddress         String?                @db.Text
+  deliveryContactName     String?                @db.VarChar(128)
+  deliveryContactPhone    String?                @db.VarChar(64)
+  packagingTerms          String?                @db.Text
+  inspectionTerms         String?                @db.Text
+  paymentTerms            String?                @db.Text
+  shippingMethod          String?                @db.Text
+  breachTerms             String?                @db.Text
+  qualityTerms            String?                @db.Text
+  changeTerms             String?                @db.Text
+  disputeTerms            String?                @db.Text
+  additionalTerms         String?                @db.Text
+  totalAmount             Decimal                @db.Decimal(18, 2)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  company                 Company                @relation(fields: [companyId], references: [id])
+  supplier                Supplier               @relation(fields: [supplierId], references: [id])
+  items                   PurchaseContractItem[]
+
+  @@map("purchase_contract")
+}
+
+model PurchaseContractItem {
+  id                 String           @id @default(cuid())
+  purchaseContractId String
+  productId          String
+  sortOrder          Int              @default(0)
+  productCode        String           @db.VarChar(64)
+  productName        String           @db.VarChar(255)
+  specification      String?          @db.VarChar(255)
+  unit               String           @db.VarChar(32)
+  quantity           Decimal          @db.Decimal(18, 3)
+  unitPrice          Decimal          @db.Decimal(18, 4)
+  amount             Decimal          @db.Decimal(18, 2)
+  purchaseContract   PurchaseContract @relation(fields: [purchaseContractId], references: [id], onDelete: Cascade)
+  product            Product          @relation(fields: [productId], references: [id])
+
+  @@index([purchaseContractId, sortOrder])
+  @@map("purchase_contract_item")
 }

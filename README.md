@@ -1,6 +1,6 @@
 # Trading ERP
 
-Trading ERP is currently at **Step 0.5: Product**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, and Company, Supplier, and Product master data.
+Trading ERP is currently at **Step 0.6: Purchase Contract**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, Company, Supplier, and Product master data, and Purchase Contracts with line items and Draft/Final/Cancelled status handling.
 
 ## Requirements
 
@@ -69,6 +69,8 @@ Authenticated users can list and view suppliers at `/suppliers`. Administrators 
 
 Authenticated users can list and view products at `/products`. Administrators can create and edit products; regular users have read-only access.
 
+Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize them, or cancel Draft/Final contracts; regular users have read-only access.
+
 ## Production migration
 
 Production and staging deployments must apply committed migrations with:
@@ -102,7 +104,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, and readiness integration must be verified against MySQL after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, and readiness integration must be verified against MySQL after deployment.
 
 ## Database development
 

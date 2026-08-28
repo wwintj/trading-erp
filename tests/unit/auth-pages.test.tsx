@@ -140,6 +140,8 @@ describe("authentication pages", () => {
     expect(html).toContain("管理员");
     expect(html).not.toContain("<dd>admin</dd>");
     expect(html).toContain("退出登录");
+    expect(html).toContain('href="/purchase-contracts"');
+    expect(html).toContain("采购合同");
     expect(html).toContain('href="/products"');
     expect(html).toContain("产品");
     expect(html).toContain('href="/suppliers"');

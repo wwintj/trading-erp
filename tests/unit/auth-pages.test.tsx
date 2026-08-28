@@ -220,12 +220,12 @@ describe("authentication pages", () => {
     const html = renderToStaticMarkup(await CompanyPage());
     const saveButton = html.match(/<button[^>]*>Save Company<\/button>/)?.[0];
 
-    expect(saveButton).toContain("bg-[#0F62FE]");
-    expect(saveButton).toContain("hover:bg-[#0043CE]");
-    expect(saveButton).toContain("active:bg-[#0043CE]");
-    expect(saveButton).toContain("focus-visible:ring-[#0F62FE]");
+    expect(saveButton).toContain("bg-[#16A34A]");
+    expect(saveButton).toContain("hover:bg-[#15803D]");
+    expect(saveButton).toContain("active:bg-[#15803D]");
+    expect(saveButton).toContain("focus-visible:ring-[#16A34A]");
     expect(saveButton).toContain("text-white");
     expect(saveButton).not.toContain("bg-white");
-    expect(saveButton).not.toContain("bg-neutral-950");
+    expect(saveButton).not.toContain("bg-[#0F62FE]");
   });
 });

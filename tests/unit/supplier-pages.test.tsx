@@ -87,9 +87,20 @@ describe("Supplier pages", () => {
 
     const html = renderToStaticMarkup(await SuppliersPage());
 
-    expect(html).toContain("No suppliers have been created yet.");
-    expect(html).toContain("New Supplier");
+    expect(html).toContain("暂无供应商。");
+    expect(html).toContain("新建供应商");
+    expect(html).toContain("返回仪表盘");
     expect(html).toContain('href="/suppliers/new"');
+  });
+
+  it("renders a safe localized list error", async () => {
+    mocks.getCurrentSession.mockResolvedValue(userSession);
+    mocks.listSuppliers.mockRejectedValue(new Error("MySQL connection details"));
+
+    const html = renderToStaticMarkup(await SuppliersPage());
+
+    expect(html).toContain("供应商信息暂时无法加载，请稍后重试。");
+    expect(html).not.toContain("MySQL");
   });
 
   it("redirects a user away from the create page to the read-only list", async () => {
@@ -128,7 +139,17 @@ describe("Supplier pages", () => {
     expect(html).toContain("惠州市华业升塑胶制品有限公司");
     expect(html).toContain("First Contact");
     expect(html).toContain('href="/suppliers/supplier-1"');
-    expect(html).not.toContain("New Supplier");
+    expect(html).toContain("供应商代码");
+    expect(html).toContain("公司全称");
+    expect(html).toContain("公司简称");
+    expect(html).toContain("联系人");
+    expect(html).toContain("电话");
+    expect(html).not.toContain("新建供应商");
+    expect(html).toContain("hover:bg-neutral-50");
+    expect(html).toContain("focus-within:bg-neutral-50");
+    expect(html).toContain("hover:text-[#15803D]");
+    expect(html).toContain("focus-visible:ring-[#16A34A]");
+    expect(html).not.toContain("hover:underline");
   });
 
   it("renders Supplier values read-only for a user", async () => {

@@ -9,7 +9,7 @@ import { getServerEnv } from "@/lib/env";
 import { listSuppliers } from "@/lib/supplier.server";
 
 export const metadata: Metadata = {
-  title: "Suppliers",
+  title: "供应商",
 };
 
 export default async function SuppliersPage() {
@@ -24,11 +24,11 @@ export default async function SuppliersPage() {
   const actions = (
     <>
       <Button variant="outline" size="sm" asChild>
-        <Link href="/dashboard">Back to Dashboard</Link>
+        <Link href="/dashboard">返回仪表盘</Link>
       </Button>
       {canEdit ? (
         <Button size="sm" asChild>
-          <Link href="/suppliers/new">New Supplier</Link>
+          <Link href="/suppliers/new">新建供应商</Link>
         </Button>
       ) : null}
     </>
@@ -41,12 +41,12 @@ export default async function SuppliersPage() {
     return (
       <SupplierShell
         appName={APP_NAME}
-        title="Suppliers"
+        title="供应商"
         description={session.user.email}
         actions={actions}
       >
         <p role="alert" className="text-sm text-red-700">
-          Supplier information is temporarily unavailable.
+          供应商信息暂时无法加载，请稍后重试。
         </p>
       </SupplierShell>
     );
@@ -55,34 +55,43 @@ export default async function SuppliersPage() {
   return (
     <SupplierShell
       appName={APP_NAME}
-      title="Suppliers"
+      title="供应商"
       description={session.user.email}
       actions={actions}
     >
       {suppliers.length === 0 ? (
-        <p className="text-sm text-neutral-600">No suppliers have been created yet.</p>
+        <p className="text-sm text-neutral-600">暂无供应商。</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b text-neutral-500">
-                <th className="px-3 py-3 font-medium">Code</th>
-                <th className="px-3 py-3 font-medium">Legal name</th>
-                <th className="px-3 py-3 font-medium">Short name</th>
-                <th className="px-3 py-3 font-medium">Contact</th>
-                <th className="px-3 py-3 font-medium">Phone</th>
+                <th className="px-3 py-3 font-medium">供应商代码</th>
+                <th className="px-3 py-3 font-medium">公司全称</th>
+                <th className="px-3 py-3 font-medium">公司简称</th>
+                <th className="px-3 py-3 font-medium">联系人</th>
+                <th className="px-3 py-3 font-medium">电话</th>
               </tr>
             </thead>
             <tbody>
               {suppliers.map((supplier) => (
-                <tr key={supplier.id} className="border-b last:border-b-0">
+                <tr
+                  key={supplier.id}
+                  className="border-b transition-colors last:border-b-0 hover:bg-neutral-50 focus-within:bg-neutral-50"
+                >
                   <td className="px-3 py-3 font-medium">
-                    <Link className="underline-offset-4 hover:underline" href={`/suppliers/${supplier.id}`}>
+                    <Link
+                      className="cursor-pointer text-neutral-900 transition-colors hover:text-[#15803D] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2"
+                      href={`/suppliers/${supplier.id}`}
+                    >
                       {supplier.code}
                     </Link>
                   </td>
                   <td className="px-3 py-3">
-                    <Link className="underline-offset-4 hover:underline" href={`/suppliers/${supplier.id}`}>
+                    <Link
+                      className="cursor-pointer text-neutral-900 transition-colors hover:text-[#15803D] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2"
+                      href={`/suppliers/${supplier.id}`}
+                    >
                       {supplier.legalName}
                     </Link>
                   </td>

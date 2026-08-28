@@ -34,3 +34,12 @@ test("unauthenticated company redirects to login", async ({ page }) => {
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
 });
+
+for (const path of ["/suppliers", "/suppliers/new", "/suppliers/missing-id"]) {
+  test(`unauthenticated ${path} redirects to login`, async ({ page }) => {
+    await page.goto(path);
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+  });
+}

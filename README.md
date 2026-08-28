@@ -1,6 +1,6 @@
 # Trading ERP
 
-Trading ERP is currently at **Step 0.3: Company**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, and Company as its first ERP master-data module.
+Trading ERP is currently at **Step 0.4: Supplier**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, and Company and Supplier master data.
 
 ## Requirements
 
@@ -65,6 +65,8 @@ Authenticated users can open `/account` from the dashboard to change their passw
 
 Authenticated users can view the single Company configuration at `/company`. Administrators can create or edit it; regular users have read-only access.
 
+Authenticated users can list and view suppliers at `/suppliers`. Administrators can create and edit suppliers; regular users have read-only access.
+
 ## Production migration
 
 Production and staging deployments must apply committed migrations with:
@@ -98,7 +100,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, and readiness integration must be verified against MySQL after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, and readiness integration must be verified against MySQL after deployment.
 
 ## Database development
 

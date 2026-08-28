@@ -60,7 +60,7 @@ export const PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE =
   "一、品名、商标、规格、产地、数量、单价、金额：";
 
 export const PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS = [
-  "货号",
+  "型号",
   "品名、商标、规格、产地",
   "数量",
   "单位",
@@ -70,7 +70,14 @@ export const PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS = [
 
 export type PurchaseContractPdfParty = {
   legalName: string;
-  fields: Array<{ label: string; value: string }>;
+  address: string;
+  phone: string;
+  contactName: string;
+};
+
+export type PurchaseContractPdfRemarkLine = {
+  marker: string | null;
+  content: string;
 };
 
 export type PurchaseContractPdfViewModel = {
@@ -93,7 +100,7 @@ export type PurchaseContractPdfViewModel = {
     amount: string;
     amountDisplay: string;
   }>;
-  remarks: string | null;
+  remarks: PurchaseContractPdfRemarkLine[];
   specialDelivery: {
     address: string | null;
     recipient: string | null;
@@ -269,15 +276,33 @@ function party(values: {
   phone: string | null;
   address: string | null;
 }): PurchaseContractPdfParty {
-  const fields = [
-    ["地址", optionalText(values.address)],
-    ["电话", optionalText(values.phone)],
-    ["联系人", optionalText(values.contactName)],
-  ]
-    .filter((field): field is [string, string] => field[1] !== null)
-    .map(([label, value]) => ({ label, value }));
+  return {
+    legalName: requiredText(values.legalName),
+    address: optionalText(values.address) ?? "",
+    phone: optionalText(values.phone) ?? "",
+    contactName: optionalText(values.contactName) ?? "",
+  };
+}
 
-  return { legalName: requiredText(values.legalName), fields };
+export function purchaseContractPdfRemarkLines(
+  value: string | null,
+): PurchaseContractPdfRemarkLine[] {
+  const normalized = optionalText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const numbered = line.match(/^(\d+\))\s*(.*)$/);
+      if (!numbered) {
+        return { marker: null, content: line };
+      }
+      return { marker: numbered[1], content: numbered[2] };
+    });
 }
 
 const CHINESE_SECTION_NUMBERS = [
@@ -333,7 +358,9 @@ export function buildPurchaseContractPdfViewModel(
       quantity: item.quantity.toFixed(3),
       unit: requiredText(item.unit),
       unitPrice,
-      unitPriceDisplay: `¥${formatExactAmountWithThousands(unitPrice)}`,
+      unitPriceDisplay: `¥${formatExactAmountWithThousands(
+        item.unitPrice.toFixed(2),
+      )}`,
       amount,
       amountDisplay: `¥${formatExactAmountWithThousands(amount)}`,
     };
@@ -394,7 +421,7 @@ export function buildPurchaseContractPdfViewModel(
     itemSectionTitle: PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE,
     itemTableLabels: PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS,
     items,
-    remarks: optionalText(source.packagingTerms),
+    remarks: purchaseContractPdfRemarkLines(source.packagingTerms),
     specialDelivery:
       deliveryAddress || deliveryContactName || deliveryContactPhone
         ? {

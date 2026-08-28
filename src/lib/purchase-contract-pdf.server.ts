@@ -9,6 +9,7 @@ import PDFDocument from "pdfkit";
 import {
   purchaseContractPdfPageFooters,
   type PurchaseContractPdfParty,
+  type PurchaseContractPdfRemarkLine,
   type PurchaseContractPdfViewModel,
 } from "@/lib/purchase-contract-pdf";
 
@@ -53,11 +54,21 @@ export async function resolvePurchaseContractPdfFontPath(
   }
 }
 
-const PAGE_WIDTH = 595.22;
-const PAGE_HEIGHT = 842;
-const CONTENT_MARGIN = 53;
-const PAGE_TOP_MARGIN = 34;
-const PAGE_BOTTOM_MARGIN = 45;
+export const PURCHASE_CONTRACT_PDF_LAYOUT = {
+  pageWidth: 595.22,
+  pageHeight: 842,
+  contentMargin: 36,
+  pageTopMargin: 28,
+  pageBottomMargin: 32,
+} as const;
+
+const {
+  pageWidth: PAGE_WIDTH,
+  pageHeight: PAGE_HEIGHT,
+  contentMargin: CONTENT_MARGIN,
+  pageTopMargin: PAGE_TOP_MARGIN,
+  pageBottomMargin: PAGE_BOTTOM_MARGIN,
+} = PURCHASE_CONTRACT_PDF_LAYOUT;
 const BODY_FONT_SIZE = 10.5;
 const BODY_LINE_GAP = 1.4;
 
@@ -135,7 +146,7 @@ function renderHeader(
     width: contentWidth(document),
     align: "center",
   });
-  document.moveDown(0.62);
+  document.moveDown(0.42);
 
   const y = document.y;
   const gap = 18;
@@ -163,7 +174,7 @@ function renderHeader(
     align: "left",
     lineGap: 2,
   });
-  document.y = y + blockHeight + 8;
+  document.y = y + blockHeight + 5;
 }
 
 type TableColumn = {
@@ -172,13 +183,13 @@ type TableColumn = {
 };
 
 function tableColumns(document: PDFKit.PDFDocument): TableColumn[] {
-  const fixedWidth = 64 + 178 + 56 + 34 + 68;
+  const fixedWidth = 70 + 211 + 64 + 38 + 62;
   return [
-    { width: 64 },
-    { width: 178 },
-    { width: 56, align: "right" },
-    { width: 34, align: "center" },
-    { width: 68, align: "right" },
+    { width: 70 },
+    { width: 211 },
+    { width: 64, align: "right" },
+    { width: 38, align: "center" },
+    { width: 62, align: "right" },
     { width: contentWidth(document) - fixedWidth, align: "right" },
   ];
 }
@@ -232,7 +243,7 @@ function renderItemsTable(
       width: contentWidth(document),
       lineGap: BODY_LINE_GAP,
     });
-  document.y += 5;
+  document.y += 3;
   drawTableHeader(document, model, columns);
 
   for (const item of model.items) {
@@ -263,7 +274,37 @@ function renderItemsTable(
     drawTableText(document, values, columns, y, rowHeight, 9.3);
     horizontalRule(document, y + rowHeight, 0.35);
   }
-  document.y += 5;
+  document.y += 3;
+}
+
+function remarkLineHeight(
+  document: PDFKit.PDFDocument,
+  line: PurchaseContractPdfRemarkLine,
+  markerWidth: number,
+): number {
+  const contentX = line.marker ? markerWidth : 0;
+  return document.heightOfString(line.content || line.marker || "", {
+    width: contentWidth(document) - contentX,
+    lineGap: BODY_LINE_GAP,
+  });
+}
+
+function renderRemarkLine(
+  document: PDFKit.PDFDocument,
+  line: PurchaseContractPdfRemarkLine,
+) {
+  const y = document.y;
+  const markerWidth = line.marker ? 22 : 0;
+  if (line.marker) {
+    document.text(line.marker, CONTENT_MARGIN, y, {
+      width: markerWidth,
+      lineGap: BODY_LINE_GAP,
+    });
+  }
+  document.text(line.content, CONTENT_MARGIN + markerWidth, y, {
+    width: contentWidth(document) - markerWidth,
+    lineGap: BODY_LINE_GAP,
+  });
 }
 
 function renderRemarks(
@@ -271,15 +312,26 @@ function renderRemarks(
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
 ) {
-  if (model.remarks) {
-    ensureSpace(document, 23, fontSource);
+  if (model.remarks.length > 0) {
+    ensureSpace(document, 22, fontSource);
     document
       .fontSize(BODY_FONT_SIZE)
-      .text(`备注：${model.remarks}`, CONTENT_MARGIN, document.y, {
+      .text("备注：", CONTENT_MARGIN, document.y, {
         width: contentWidth(document),
         lineGap: BODY_LINE_GAP,
       });
-    document.y += 3;
+    document.y += 1;
+    for (const line of model.remarks) {
+      document.fontSize(BODY_FONT_SIZE);
+      const markerWidth = line.marker ? 22 : 0;
+      ensureSpace(
+        document,
+        remarkLineHeight(document, line, markerWidth),
+        fontSource,
+      );
+      renderRemarkLine(document, line);
+    }
+    document.y += 2;
   }
 
   if (model.specialDelivery) {
@@ -301,7 +353,7 @@ function renderRemarks(
         width: contentWidth(document),
         lineGap: BODY_LINE_GAP,
       });
-    document.y += 3;
+    document.y += 2;
   }
 }
 
@@ -336,7 +388,7 @@ function renderTotal(
   );
   document.y = y + height + 9;
   horizontalRule(document, document.y, 0.65);
-  document.y += 6;
+  document.y += 4;
 }
 
 function renderTerms(
@@ -352,41 +404,21 @@ function renderTerms(
         width: contentWidth(document),
         lineGap: BODY_LINE_GAP,
       });
-    document.y += 2;
+    document.y += 1;
   }
 }
 
-function partyText(label: "买方" | "卖方", party: PurchaseContractPdfParty) {
-  return [
-    `${label}：${party.legalName}`,
-    ...party.fields.map((field) => `${field.label}：${field.value}`),
-  ].join("\n");
-}
-
-function renderStackedPartyBlock(
-  document: PDFKit.PDFDocument,
-  model: PurchaseContractPdfViewModel,
-  fontSource: PurchaseContractPdfFontSource,
+export function purchaseContractPdfPartyRows(
+  label: "买方" | "卖方",
+  party: PurchaseContractPdfParty,
 ) {
-  for (const [label, party] of [
-    ["买方", model.buyer],
-    ["卖方", model.seller],
-  ] as const) {
-    ensureSpace(document, 70, fontSource);
-    horizontalRule(document, document.y, 1);
-    document.y += 7;
-    document
-      .fontSize(BODY_FONT_SIZE)
-      .text(partyText(label, party), CONTENT_MARGIN, document.y, {
-        width: contentWidth(document),
-        lineGap: 2,
-      });
-    document.text("盖章：", CONTENT_MARGIN, document.y, {
-      width: contentWidth(document),
-      lineGap: 2,
-    });
-    document.y += 36;
-  }
+  return [
+    { label, value: party.legalName },
+    { label: "地址", value: party.address },
+    { label: "电话", value: party.phone },
+    { label: "联系人", value: party.contactName },
+    { label: "盖章", value: "" },
+  ];
 }
 
 function renderBottomPartyBlock(
@@ -396,19 +428,28 @@ function renderBottomPartyBlock(
 ) {
   const gap = 20;
   const columnWidth = (contentWidth(document) - gap) / 2;
-  const buyerText = partyText("买方", model.buyer);
-  const sellerText = partyText("卖方", model.seller);
+  const buyerRows = purchaseContractPdfPartyRows("买方", model.buyer);
+  const sellerRows = purchaseContractPdfPartyRows("卖方", model.seller);
   document.fontSize(BODY_FONT_SIZE);
-  const textHeight = Math.max(
-    document.heightOfString(buyerText, { width: columnWidth - 5, lineGap: 2 }),
-    document.heightOfString(sellerText, { width: columnWidth - 5, lineGap: 2 }),
-  );
-  const blockHeight = textHeight + 58;
-  const fullPageBodyHeight = PAGE_HEIGHT - PAGE_TOP_MARGIN - PAGE_BOTTOM_MARGIN;
-  if (blockHeight > fullPageBodyHeight) {
-    renderStackedPartyBlock(document, model, fontSource);
-    return;
-  }
+  const rowHeights = buyerRows.map((buyerRow, index) => {
+    const sellerRow = sellerRows[index];
+    if (buyerRow.label === "盖章") {
+      return 42;
+    }
+    return (
+      Math.max(
+        document.heightOfString(`${buyerRow.label}：${buyerRow.value}`, {
+          width: columnWidth - 5,
+          lineGap: 2,
+        }),
+        document.heightOfString(`${sellerRow.label}：${sellerRow.value}`, {
+          width: columnWidth - 5,
+          lineGap: 2,
+        }),
+      ) + 3
+    );
+  });
+  const blockHeight = rowHeights.reduce((sum, height) => sum + height, 0) + 14;
 
   const pageBreak = ensureSpace(document, blockHeight + 6, fontSource);
   const y = pageBreak
@@ -422,20 +463,22 @@ function renderBottomPartyBlock(
     .lineWidth(0.45)
     .strokeColor("#555555")
     .stroke();
-  document.fontSize(BODY_FONT_SIZE).text(buyerText, CONTENT_MARGIN, y + 7, {
-    width: columnWidth - 5,
-    lineGap: 2,
-  });
-  document.text(sellerText, separatorX + gap / 2, y + 7, {
-    width: columnWidth - 5,
-    lineGap: 2,
-  });
-  const stampY = y + blockHeight - 28;
-  document.text("盖章：", CONTENT_MARGIN, stampY, {
-    width: columnWidth - 5,
-  });
-  document.text("盖章：", separatorX + gap / 2, stampY, {
-    width: columnWidth - 5,
+  let rowY = y + 7;
+  buyerRows.forEach((buyerRow, index) => {
+    const sellerRow = sellerRows[index];
+    document.fontSize(BODY_FONT_SIZE).text(
+      `${buyerRow.label}：${buyerRow.value}`,
+      CONTENT_MARGIN,
+      rowY,
+      { width: columnWidth - 5, lineGap: 2 },
+    );
+    document.text(
+      `${sellerRow.label}：${sellerRow.value}`,
+      separatorX + gap / 2,
+      rowY,
+      { width: columnWidth - 5, lineGap: 2 },
+    );
+    rowY += rowHeights[index];
   });
   document.y = y + blockHeight + 3;
 }
@@ -452,7 +495,7 @@ function renderFooters(
     applyFont(document, fontSource)
       .fontSize(8)
       .fillColor("#666666")
-      .text(footer, CONTENT_MARGIN, document.page.height - 27, {
+      .text(footer, CONTENT_MARGIN, document.page.height - 22, {
         width: contentWidth(document),
         align: "center",
         lineBreak: false,

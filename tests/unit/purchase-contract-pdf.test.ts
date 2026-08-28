@@ -16,17 +16,20 @@ import {
   purchaseContractPdfContentDisposition,
   purchaseContractPdfPageFooter,
   purchaseContractPdfPageFooters,
+  purchaseContractPdfRemarkLines,
   type PurchaseContractPdfSource,
 } from "@/lib/purchase-contract-pdf";
 import {
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+  PURCHASE_CONTRACT_PDF_LAYOUT,
   PurchaseContractPdfFontError,
+  purchaseContractPdfPartyRows,
   renderPurchaseContractPdf,
   resolvePurchaseContractPdfFontPath,
 } from "@/lib/purchase-contract-pdf.server";
 
 const SIMPLIFIED_CHINESE_CORE_SAMPLE =
-  "采购合同合同编号签约时间签约地点买方卖方品名商标规格产地数量单价金额备注特别注意交货地址收件人验收方法包装要求货款结算运输方式合同变更解除争议违约责任附加条款";
+  "采购合同合同编号签约时间签约地点买方卖方型号品名商标规格产地数量单价金额备注特别注意交货地址收件人验收方法包装要求货款结算运输方式合同变更解除争议违约责任附加条款";
 
 function contractFixture(): PurchaseContractPdfSource {
   return {
@@ -53,7 +56,8 @@ function contractFixture(): PurchaseContractPdfSource {
     deliveryAddress: "浙江省乐清市历史收货地址",
     deliveryContactName: "张建英",
     deliveryContactPhone: "13800000000",
-    packagingTerms: "第一行包装要求\n第二行包装要求",
+    packagingTerms:
+      " 1)第一项很长的包装要求，内容超过单行宽度后，续行正文仍应与编号之后的正文起点保持一致，不回到页面左侧。 \n 2)第二项 \n 3)第三项 ",
     inspectionTerms: "按样验收",
     paymentTerms: "款到发货",
     shippingMethod: "德邦物流，运费由卖方承担",
@@ -106,7 +110,15 @@ describe("Purchase Contract PDF historical view model", () => {
       signingPlace: "天津",
       itemSectionTitle: PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE,
       itemTableLabels: PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS,
-      remarks: "第一行包装要求\n第二行包装要求",
+      remarks: [
+        {
+          marker: "1)",
+          content:
+            "第一项很长的包装要求，内容超过单行宽度后，续行正文仍应与编号之后的正文起点保持一致，不回到页面左侧。",
+        },
+        { marker: "2)", content: "第二项" },
+        { marker: "3)", content: "第三项" },
+      ],
       specialDelivery: {
         address: "浙江省乐清市历史收货地址",
         recipient: "张建英",
@@ -124,22 +136,24 @@ describe("Purchase Contract PDF historical view model", () => {
           quantity: "6400.000",
           unit: "米",
           unitPrice: "0.9000",
-          unitPriceDisplay: "¥0.9000",
+          unitPriceDisplay: "¥0.90",
           amount: "5760.00",
           amountDisplay: "¥5,760.00",
         },
       ],
     });
-    expect(model.buyer.fields).toEqual([
-      { label: "地址", value: "天津市历史买方地址" },
-      { label: "电话", value: "022-12345678" },
-      { label: "联系人", value: "买方联系人" },
-    ]);
-    expect(model.seller.fields).toEqual([
-      { label: "地址", value: "惠州市历史卖方地址" },
-      { label: "电话", value: "0752-1234567" },
-      { label: "联系人", value: "卖方联系人" },
-    ]);
+    expect(model.buyer).toEqual({
+      legalName: "天津纬信科技有限公司",
+      address: "天津市历史买方地址",
+      phone: "022-12345678",
+      contactName: "买方联系人",
+    });
+    expect(model.seller).toEqual({
+      legalName: "惠州市华业升塑胶制品有限公司",
+      address: "惠州市历史卖方地址",
+      phone: "0752-1234567",
+      contactName: "卖方联系人",
+    });
     expect(JSON.stringify(model)).not.toContain("当前 Company 名称");
     expect(JSON.stringify(model)).not.toContain("当前 Supplier 名称");
     expect(JSON.stringify(model)).not.toContain("当前 Product 名称");
@@ -176,6 +190,8 @@ describe("Purchase Contract PDF historical view model", () => {
     for (const label of PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS) {
       expect(modelText).toContain(label);
     }
+    expect(PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS[0]).toBe("型号");
+    expect(modelText).not.toContain("货号");
     for (const forbidden of [
       "买卖双方",
       "合同明细",
@@ -193,9 +209,64 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model.items[0]).toMatchObject({
       quantity: "6400.000",
       unitPrice: "0.9000",
+      unitPriceDisplay: "¥0.90",
       amount: "5760.00",
+      amountDisplay: "¥5,760.00",
     });
     expect(model.totalAmount).toBe("5760.00");
+  });
+
+  it("keeps logical remark lines and their original number markers", () => {
+    expect(
+      purchaseContractPdfRemarkLines(
+        " 1)第一项很长的包装要求…… \n 2) 第二项 \n 3)第三项 \n 10)第十项 \n 普通说明 ",
+      ),
+    ).toEqual([
+      { marker: "1)", content: "第一项很长的包装要求……" },
+      { marker: "2)", content: "第二项" },
+      { marker: "3)", content: "第三项" },
+      { marker: "10)", content: "第十项" },
+      { marker: null, content: "普通说明" },
+    ]);
+  });
+
+  it("keeps fixed buyer and seller rows when snapshot fields are empty", () => {
+    const source = contractFixture();
+    source.sellerAddress = null;
+    source.sellerPhone = null;
+    source.sellerContactName = null;
+    const model = buildPurchaseContractPdfViewModel(source);
+
+    const buyerRows = purchaseContractPdfPartyRows("买方", model.buyer);
+    const sellerRows = purchaseContractPdfPartyRows("卖方", model.seller);
+
+    expect(buyerRows.map((row) => row.label)).toEqual([
+      "买方",
+      "地址",
+      "电话",
+      "联系人",
+      "盖章",
+    ]);
+    expect(sellerRows).toEqual([
+      { label: "卖方", value: "惠州市华业升塑胶制品有限公司" },
+      { label: "地址", value: "" },
+      { label: "电话", value: "" },
+      { label: "联系人", value: "" },
+      { label: "盖章", value: "" },
+    ]);
+    expect(buyerRows.slice(1).map((row) => row.label)).toEqual(
+      sellerRows.slice(1).map((row) => row.label),
+    );
+  });
+
+  it("uses the narrow A4 printable-area constants", () => {
+    expect(PURCHASE_CONTRACT_PDF_LAYOUT).toEqual({
+      pageWidth: 595.22,
+      pageHeight: 842,
+      contentMargin: 36,
+      pageTopMargin: 28,
+      pageBottomMargin: 32,
+    });
   });
 
   it("validates exact multi-line totals without binary floating point", () => {

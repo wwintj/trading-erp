@@ -39,9 +39,13 @@ vi.mock("next/navigation", () => ({
 
 import AccountPage from "@/app/account/page";
 import CompanyPage from "@/app/company/page";
-import DashboardPage from "@/app/dashboard/page";
+import DashboardPage, { metadata as dashboardMetadata } from "@/app/dashboard/page";
 import LoginPage from "@/app/login/page";
 import Home from "@/app/page";
+import {
+  getSignOutButtonLabel,
+  SIGN_OUT_ERROR_MESSAGE,
+} from "@/components/auth/sign-out-button";
 
 describe("authentication pages", () => {
   beforeEach(() => {
@@ -98,7 +102,7 @@ describe("authentication pages", () => {
     await expect(Home()).rejects.toThrow("NEXT_REDIRECT:/dashboard");
   });
 
-  it("renders the authenticated dashboard with minimal user information", async () => {
+  it("renders the localized authenticated dashboard for an admin", async () => {
     mocks.getCurrentSession.mockResolvedValue({
       session: {
         id: "session-id",
@@ -128,15 +132,46 @@ describe("authentication pages", () => {
 
     const html = renderToStaticMarkup(await DashboardPage());
 
-    expect(html).toContain("Welcome, Admin User");
+    expect(dashboardMetadata.title).toBe("仪表盘");
+    expect(html).toContain("欢迎，Admin User");
     expect(html).toContain("admin@example.com");
-    expect(html).toContain("admin");
-    expect(html).toContain("Sign Out");
+    expect(html).toContain("邮箱");
+    expect(html).toContain("角色");
+    expect(html).toContain("管理员");
+    expect(html).not.toContain("<dd>admin</dd>");
+    expect(html).toContain("退出登录");
     expect(html).toContain('href="/products"');
     expect(html).toContain("产品");
     expect(html).toContain('href="/suppliers"');
+    expect(html).toContain("供应商");
     expect(html).toContain('href="/company"');
-    expect(html).toContain("Account / Change Password");
+    expect(html).toContain("公司信息");
+    expect(html).toContain('href="/account"');
+    expect(html).toContain("账户 / 修改密码");
+  });
+
+  it("localizes the user role only in the Dashboard display", async () => {
+    const userSession = {
+      user: {
+        name: "Regular User",
+        email: "user@example.com",
+        role: "user",
+      },
+    };
+    mocks.getCurrentSession.mockResolvedValue(userSession);
+
+    const html = renderToStaticMarkup(await DashboardPage());
+
+    expect(html).toContain("欢迎，Regular User");
+    expect(html).toContain("用户");
+    expect(html).not.toContain("<dd>user</dd>");
+    expect(userSession.user.role).toBe("user");
+  });
+
+  it("uses Chinese sign-out labels and a safe Chinese failure message", () => {
+    expect(getSignOutButtonLabel(false)).toBe("退出登录");
+    expect(getSignOutButtonLabel(true)).toBe("正在退出…");
+    expect(SIGN_OUT_ERROR_MESSAGE).toBe("退出登录失败，请稍后重试。");
   });
 
   it("renders the account page and password bounds for an authenticated user", async () => {

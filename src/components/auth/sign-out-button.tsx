@@ -6,6 +6,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { signOutCurrentSession } from "@/lib/auth-flow";
 
+export const SIGN_OUT_LABEL = "退出登录";
+export const SIGN_OUT_PENDING_LABEL = "正在退出…";
+export const SIGN_OUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
+
+export function getSignOutButtonLabel(pending: boolean) {
+  return pending ? SIGN_OUT_PENDING_LABEL : SIGN_OUT_LABEL;
+}
+
 export function SignOutButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -18,7 +26,7 @@ export function SignOutButton() {
     const result = await signOutCurrentSession();
 
     if (!result.ok) {
-      setError("Unable to sign out. Please try again.");
+      setError(SIGN_OUT_ERROR_MESSAGE);
       setPending(false);
       return;
     }
@@ -30,7 +38,7 @@ export function SignOutButton() {
   return (
     <div className="flex flex-col items-end gap-2">
       <Button variant="outline" size="sm" onClick={handleSignOut} disabled={pending}>
-        {pending ? "Signing out…" : "Sign Out"}
+        {getSignOutButtonLabel(pending)}
       </Button>
       {error ? (
         <p className="text-sm text-red-700" role="alert">

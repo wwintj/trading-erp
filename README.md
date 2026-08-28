@@ -8,6 +8,16 @@ Trading ERP is currently at **Step 0.7: Purchase Contract PDF Export**. It provi
 - pnpm
 - Docker with Docker Compose
 
+## System dependencies
+
+On a new Ubuntu VPS, install or verify the operating-system dependencies before deploying the application:
+
+```bash
+./scripts/install-system-deps.sh
+```
+
+By default, the script ensures that the `fonts-cwtex-fs` package provides the Purchase Contract PDF font at `/usr/share/fonts/truetype/cwtex/cwfs.ttf`. If `PURCHASE_CONTRACT_PDF_FONT_PATH` is set, the script validates that custom font file and skips the default package installation. Font files themselves are not stored in this Git repository.
+
 ## Local setup
 
 1. Select Node.js 24:

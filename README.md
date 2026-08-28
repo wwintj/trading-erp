@@ -16,7 +16,7 @@ On a new Ubuntu VPS, install or verify the operating-system dependencies before 
 ./scripts/install-system-deps.sh
 ```
 
-By default, the script ensures that the `fonts-cwtex-fs` package provides the Purchase Contract PDF font at `/usr/share/fonts/truetype/cwtex/cwfs.ttf`. If `PURCHASE_CONTRACT_PDF_FONT_PATH` is set, the script validates that custom font file and skips the default package installation. Font files themselves are not stored in this Git repository.
+The script remains the stable deployment entry point for operating-system dependencies. The application currently has no required OS-level packages, so it performs a safe dependency check and exits successfully. Purchase Contract PDF export uses the bundled open-source FandolFang font and no longer requires an apt-installed Chinese font.
 
 ## Local setup
 
@@ -81,7 +81,7 @@ Authenticated users can list and view products at `/products`. Administrators ca
 
 Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize or reopen them, or cancel Draft/Final contracts; regular users have read-only access. Both roles can export a formal PDF while a contract is Final; Draft and Cancelled contracts cannot be exported.
 
-Production PDF export requires the `fonts-cwtex-fs` Ubuntu package and uses cwTeXFangSong at `/usr/share/fonts/truetype/cwtex/cwfs.ttf`. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to override that path. Font files are deployment dependencies and are not stored in this repository.
+Purchase Contract PDF export uses the bundled `assets/fonts/FandolFang-Regular.otf` by default, so a new VPS does not need a system Chinese-font package. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to use a different readable font file; an invalid override fails safely without falling back. FandolFang-Regular comes from the official Fandol package on CTAN and is distributed under GPLv3 with the GPL font exception; its unmodified upstream license is stored at `assets/fonts/COPYING-Fandol`.
 
 ## Production migration
 
@@ -116,7 +116,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, PDF export with MySQL snapshots and cwTeX FangSong rendering, and readiness integration must be verified after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, PDF export with MySQL snapshots and bundled FandolFang rendering, and readiness integration must be verified after deployment.
 
 ## Database development
 

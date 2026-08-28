@@ -56,32 +56,58 @@ export type PurchaseContractPdfSource = {
   }>;
 };
 
+export const PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE =
+  "一、品名、商标、规格、产地、数量、单价、金额：";
+
+export const PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS = [
+  "货号",
+  "品名、商标、规格、产地",
+  "数量",
+  "单位",
+  "单价",
+  "金额",
+] as const;
+
 export type PurchaseContractPdfParty = {
-  heading: "买方" | "卖方";
   legalName: string;
   fields: Array<{ label: string; value: string }>;
 };
 
 export type PurchaseContractPdfViewModel = {
-  title: "采购合同";
+  primaryTitle: string;
+  subtitle: "采购合同";
   contractNo: string;
   signingDate: string;
   signingPlace: string | null;
   buyer: PurchaseContractPdfParty;
   seller: PurchaseContractPdfParty;
+  itemSectionTitle: typeof PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE;
+  itemTableLabels: typeof PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS;
   items: Array<{
-    sequence: string;
     productCode: string;
     productDescription: string;
     quantity: string;
     unit: string;
     unitPrice: string;
+    unitPriceDisplay: string;
     amount: string;
+    amountDisplay: string;
   }>;
+  remarks: string | null;
+  specialDelivery: {
+    address: string | null;
+    recipient: string | null;
+    phone: string | null;
+  } | null;
   totalAmount: string;
-  terms: Array<{ label: string; value: string }>;
-  buyerSignature: string;
-  sellerSignature: string;
+  totalAmountDisplay: string;
+  totalAmountUppercase: string;
+  terms: Array<{
+    sectionNumber: number;
+    heading: string;
+    label: string;
+    value: string;
+  }>;
 };
 
 export class PurchaseContractPdfIntegrityError extends Error {
@@ -103,11 +129,17 @@ function optionalText(value: string | null): string | null {
   return normalized || null;
 }
 
-function dateOnly(value: Date): string {
+function dateOnlyParts(value: Date): [string, string, string] {
   if (Number.isNaN(value.getTime())) {
     throw new PurchaseContractPdfIntegrityError();
   }
-  return value.toISOString().slice(0, 10);
+  const isoDate = value.toISOString().slice(0, 10);
+  return isoDate.split("-") as [string, string, string];
+}
+
+function chineseDate(value: Date): string {
+  const [year, month, day] = dateOnlyParts(value);
+  return `${year}年${month}月${day}日`;
 }
 
 function canonicalDecimal(value: string): string | null {
@@ -127,33 +159,140 @@ function decimalEquals(left: string, right: string): boolean {
   return normalizedLeft !== null && normalizedLeft === normalizedRight;
 }
 
-function party(
-  heading: "买方" | "卖方",
-  values: {
-    legalName: string;
-    unifiedCreditCode: string | null;
-    contactName: string | null;
-    phone: string | null;
-    address: string | null;
-    bankName: string | null;
-    bankAccount: string | null;
-  },
-): PurchaseContractPdfParty {
-  const legalName = requiredText(values.legalName);
+export function formatExactAmountWithThousands(value: string): string {
+  const match = value.match(/^(\d+)(\.\d+)?$/);
+  if (!match) {
+    throw new PurchaseContractPdfIntegrityError();
+  }
+  const integer = match[1].replace(/^0+(?=\d)/, "");
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${grouped}${match[2] ?? ""}`;
+}
+
+const RMB_DIGITS = ["零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"];
+const RMB_SMALL_UNITS = ["仟", "佰", "拾", ""];
+const RMB_GROUP_UNITS = ["", "万", "亿", "万亿"];
+
+function fourDigitRmb(group: string): string {
+  const digits = group.padStart(4, "0");
+  let result = "";
+  let pendingZero = false;
+
+  for (let index = 0; index < digits.length; index += 1) {
+    const digit = digits.charCodeAt(index) - 48;
+    const hasLaterValue = /[1-9]/.test(digits.slice(index + 1));
+    if (digit === 0) {
+      if (result && hasLaterValue) {
+        pendingZero = true;
+      }
+      continue;
+    }
+    if (pendingZero) {
+      result += RMB_DIGITS[0];
+      pendingZero = false;
+    }
+    result += `${RMB_DIGITS[digit]}${RMB_SMALL_UNITS[index]}`;
+  }
+
+  return result;
+}
+
+function integerRmb(integer: string): string {
+  const normalized = integer.replace(/^0+(?=\d)/, "");
+  if (normalized === "0") {
+    return RMB_DIGITS[0];
+  }
+  if (normalized.length > 16) {
+    throw new PurchaseContractPdfIntegrityError();
+  }
+
+  const groups: string[] = [];
+  for (let end = normalized.length; end > 0; end -= 4) {
+    groups.unshift(normalized.slice(Math.max(0, end - 4), end));
+  }
+
+  let result = "";
+  let pendingZero = false;
+  groups.forEach((group, index) => {
+    const paddedGroup = group.padStart(4, "0");
+    const groupUnitIndex = groups.length - index - 1;
+    if (/^0{4}$/.test(paddedGroup)) {
+      if (result && groups.slice(index + 1).some((next) => !/^0+$/.test(next))) {
+        pendingZero = true;
+      }
+      return;
+    }
+
+    const needsLeadingZero =
+      result !== "" && (pendingZero || paddedGroup.startsWith("0"));
+    if (needsLeadingZero && !result.endsWith(RMB_DIGITS[0])) {
+      result += RMB_DIGITS[0];
+    }
+    result += `${fourDigitRmb(paddedGroup)}${RMB_GROUP_UNITS[groupUnitIndex]}`;
+    pendingZero = false;
+  });
+
+  return result;
+}
+
+export function formatRmbUppercase(value: string): string {
+  const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
+  if (!match) {
+    throw new PurchaseContractPdfIntegrityError();
+  }
+  const integer = match[1].replace(/^0+(?=\d)/, "");
+  if (integer.length > 16) {
+    throw new PurchaseContractPdfIntegrityError();
+  }
+  const fraction = (match[2] ?? "").padEnd(2, "0");
+  const jiao = fraction.charCodeAt(0) - 48;
+  const fen = fraction.charCodeAt(1) - 48;
+
+  let result = `${integerRmb(integer)}元`;
+  if (jiao === 0 && fen === 0) {
+    return `${result}整`;
+  }
+  if (jiao > 0) {
+    result += `${RMB_DIGITS[jiao]}角`;
+  } else if (fen > 0) {
+    result += RMB_DIGITS[0];
+  }
+  if (fen > 0) {
+    result += `${RMB_DIGITS[fen]}分`;
+  }
+  return result;
+}
+
+function party(values: {
+  legalName: string;
+  contactName: string | null;
+  phone: string | null;
+  address: string | null;
+}): PurchaseContractPdfParty {
   const fields = [
-    ["名称", legalName],
-    ["统一社会信用代码", optionalText(values.unifiedCreditCode)],
-    ["联系人", optionalText(values.contactName)],
-    ["电话", optionalText(values.phone)],
     ["地址", optionalText(values.address)],
-    ["开户行", optionalText(values.bankName)],
-    ["银行账号", optionalText(values.bankAccount)],
+    ["电话", optionalText(values.phone)],
+    ["联系人", optionalText(values.contactName)],
   ]
     .filter((field): field is [string, string] => field[1] !== null)
     .map(([label, value]) => ({ label, value }));
 
-  return { heading, legalName, fields };
+  return { legalName: requiredText(values.legalName), fields };
 }
+
+const CHINESE_SECTION_NUMBERS = [
+  "零",
+  "一",
+  "二",
+  "三",
+  "四",
+  "五",
+  "六",
+  "七",
+  "八",
+  "九",
+  "十",
+];
 
 export function buildPurchaseContractPdfViewModel(
   source: PurchaseContractPdfSource,
@@ -184,16 +323,19 @@ export function buildPurchaseContractPdfViewModel(
 
     const productName = requiredText(item.productName);
     const specification = optionalText(item.specification);
+    const unitPrice = item.unitPrice.toFixed(4);
+    const amount = item.amount.toFixed(2);
     return {
-      sequence: String(index + 1),
       productCode: requiredText(item.productCode),
       productDescription: specification
-        ? `${productName}\n规格/型号：${specification}`
+        ? `${productName}\n规格：${specification}`
         : productName,
       quantity: item.quantity.toFixed(3),
       unit: requiredText(item.unit),
-      unitPrice: item.unitPrice.toFixed(4),
-      amount: item.amount.toFixed(2),
+      unitPrice,
+      unitPriceDisplay: `¥${formatExactAmountWithThousands(unitPrice)}`,
+      amount,
+      amountDisplay: `¥${formatExactAmountWithThousands(amount)}`,
     };
   });
 
@@ -201,55 +343,70 @@ export function buildPurchaseContractPdfViewModel(
     throw new PurchaseContractPdfIntegrityError();
   }
 
-  const terms = [
-    ["包装要求", optionalText(source.packagingTerms)],
-    ["交货日期", source.deliveryDate ? dateOnly(source.deliveryDate) : null],
-    ["收货地址", optionalText(source.deliveryAddress)],
-    ["收货人", optionalText(source.deliveryContactName)],
-    ["收货电话", optionalText(source.deliveryContactPhone)],
-    ["验收条款", optionalText(source.inspectionTerms)],
-    ["付款条款", optionalText(source.paymentTerms)],
-    ["运输方式", optionalText(source.shippingMethod)],
-    ["违约/迟延条款", optionalText(source.breachTerms)],
-    ["质量条款", optionalText(source.qualityTerms)],
-    ["变更条款", optionalText(source.changeTerms)],
+  const storedTerms: Array<[string, string | null]> = [
+    ["验收方法", optionalText(source.inspectionTerms)],
+    ["质量/异议条款", optionalText(source.qualityTerms)],
+    ["交货时间", source.deliveryDate ? chineseDate(source.deliveryDate) : null],
+    ["货款结算", optionalText(source.paymentTerms)],
+    ["运输方式及费用承担", optionalText(source.shippingMethod)],
+    ["合同变更", optionalText(source.changeTerms)],
     ["争议解决", optionalText(source.disputeTerms)],
-    ["补充条款", optionalText(source.additionalTerms)],
-  ]
+    ["违约责任", optionalText(source.breachTerms)],
+    ["附加条款", optionalText(source.additionalTerms)],
+  ];
+  const terms = storedTerms
     .filter((term): term is [string, string] => term[1] !== null)
-    .map(([label, value]) => ({ label, value }));
+    .map(([label, value], index) => {
+      const sectionNumber = index + 2;
+      return {
+        sectionNumber,
+        heading: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、${label}：`,
+        label,
+        value,
+      };
+    });
 
-  const buyer = party("买方", {
+  const buyer = party({
     legalName: source.buyerLegalName,
-    unifiedCreditCode: source.buyerUnifiedCreditCode,
     contactName: source.buyerContactName,
     phone: source.buyerPhone,
     address: source.buyerAddress,
-    bankName: source.buyerBankName,
-    bankAccount: source.buyerBankAccount,
   });
-  const seller = party("卖方", {
+  const seller = party({
     legalName: source.sellerLegalName,
-    unifiedCreditCode: source.sellerUnifiedCreditCode,
     contactName: source.sellerContactName,
     phone: source.sellerPhone,
     address: source.sellerAddress,
-    bankName: source.sellerBankName,
-    bankAccount: source.sellerBankAccount,
   });
+  const deliveryAddress = optionalText(source.deliveryAddress);
+  const deliveryContactName = optionalText(source.deliveryContactName);
+  const deliveryContactPhone = optionalText(source.deliveryContactPhone);
+  const totalAmount = source.totalAmount.toFixed(2);
 
   return {
-    title: "采购合同",
+    primaryTitle: buyer.legalName,
+    subtitle: "采购合同",
     contractNo: requiredText(source.contractNo),
-    signingDate: dateOnly(source.signingDate),
+    signingDate: chineseDate(source.signingDate),
     signingPlace: optionalText(source.signingPlace),
     buyer,
     seller,
+    itemSectionTitle: PURCHASE_CONTRACT_PDF_ITEM_SECTION_TITLE,
+    itemTableLabels: PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS,
     items,
-    totalAmount: source.totalAmount.toFixed(2),
+    remarks: optionalText(source.packagingTerms),
+    specialDelivery:
+      deliveryAddress || deliveryContactName || deliveryContactPhone
+        ? {
+            address: deliveryAddress,
+            recipient: deliveryContactName,
+            phone: deliveryContactPhone,
+          }
+        : null,
+    totalAmount,
+    totalAmountDisplay: `¥${formatExactAmountWithThousands(totalAmount)}`,
+    totalAmountUppercase: formatRmbUppercase(totalAmount),
     terms,
-    buyerSignature: buyer.legalName,
-    sellerSignature: seller.legalName,
   };
 }
 
@@ -290,4 +447,13 @@ export function purchaseContractPdfPageFooter(
   pageCount: number,
 ): string {
   return `第 ${pageNumber} 页 / 共 ${pageCount} 页`;
+}
+
+export function purchaseContractPdfPageFooters(pageCount: number): string[] {
+  if (pageCount <= 1) {
+    return [];
+  }
+  return Array.from({ length: pageCount }, (_, index) =>
+    purchaseContractPdfPageFooter(index + 1, pageCount),
+  );
 }

@@ -181,7 +181,7 @@ describe("Purchase Contract PDF route response", () => {
 
     expect(response.status).toBe(503);
     expect(body).toBe("采购合同 PDF 字体不可用，请联系管理员。");
-    expect(body).not.toContain("cwfs.ttf");
+    expect(body).not.toContain("FandolFang-Regular.otf");
   });
 
   it("fails safely when persisted financial values are inconsistent", async () => {

@@ -94,6 +94,7 @@ export type PurchaseContractPdfViewModel = {
     productCode: string;
     productDescription: string;
     quantity: string;
+    quantityDisplay: string;
     unit: string;
     unitPrice: string;
     unitPriceDisplay: string;
@@ -356,6 +357,7 @@ export function buildPurchaseContractPdfViewModel(
         ? `${productName}\n规格：${specification}`
         : productName,
       quantity: item.quantity.toFixed(3),
+      quantityDisplay: item.quantity.toFixed(2),
       unit: requiredText(item.unit),
       unitPrice,
       unitPriceDisplay: `¥${formatExactAmountWithThousands(

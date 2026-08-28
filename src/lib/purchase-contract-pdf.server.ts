@@ -19,6 +19,17 @@ export const PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH = path.join(
   "fonts",
   "FandolFang-Regular.otf",
 );
+export const PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH = path.join(
+  process.cwd(),
+  "assets",
+  "fonts",
+  "FandolHei-Bold.otf",
+);
+
+export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH = 46;
+export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
+  "PurchaseContractBoldFont";
 
 export class PurchaseContractPdfFontError extends Error {
   constructor() {
@@ -48,6 +59,7 @@ export async function resolvePurchaseContractPdfFontPath(
 
   try {
     await assertReadable(fontPath);
+    await assertReadable(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
     return fontPath;
   } catch {
     throw new PurchaseContractPdfFontError();
@@ -96,6 +108,23 @@ function applyFont(
   return document.font(fontSource);
 }
 
+function registerFont(
+  document: PDFKit.PDFDocument,
+  fontName: string,
+  fontSource: PurchaseContractPdfFontSource,
+) {
+  if (
+    typeof fontSource === "object" &&
+    fontSource !== null &&
+    "source" in fontSource
+  ) {
+    document.registerFont(fontName, fontSource.source, fontSource.family);
+    return;
+  }
+
+  document.registerFont(fontName, fontSource);
+}
+
 function contentWidth(document: PDFKit.PDFDocument): number {
   return document.page.width - CONTENT_MARGIN * 2;
 }
@@ -129,6 +158,19 @@ function horizontalRule(
     .stroke();
 }
 
+export function purchaseContractPdfHeaderMetadataLayout() {
+  const gap = 18;
+  const width = 178;
+  const printableWidth = PAGE_WIDTH - CONTENT_MARGIN * 2;
+  const leftWidth = printableWidth - width - gap;
+  return {
+    x: CONTENT_MARGIN + leftWidth + gap,
+    width,
+    rightEdge: PAGE_WIDTH - CONTENT_MARGIN,
+    align: PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN,
+  };
+}
+
 function renderHeader(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
@@ -150,7 +192,8 @@ function renderHeader(
 
   const y = document.y;
   const gap = 18;
-  const rightWidth = 178;
+  const metadataLayout = purchaseContractPdfHeaderMetadataLayout();
+  const rightWidth = metadataLayout.width;
   const leftWidth = contentWidth(document) - rightWidth - gap;
   const leftText = `买方：${model.buyer.legalName}\n卖方：${model.seller.legalName}`;
   const rightLines = [
@@ -169,9 +212,9 @@ function renderHeader(
     width: leftWidth,
     lineGap: 2,
   });
-  document.text(rightText, CONTENT_MARGIN + leftWidth + gap, y, {
-    width: rightWidth,
-    align: "left",
+  document.text(rightText, metadataLayout.x, y, {
+    width: metadataLayout.width,
+    align: metadataLayout.align,
     lineGap: 2,
   });
   document.y = y + blockHeight + 5;
@@ -250,7 +293,7 @@ function renderItemsTable(
     const values = [
       item.productCode,
       item.productDescription,
-      item.quantity,
+      item.quantityDisplay,
       item.unit,
       item.unitPriceDisplay,
       item.amountDisplay,
@@ -335,7 +378,6 @@ function renderRemarks(
   }
 
   if (model.specialDelivery) {
-    ensureSpace(document, 30, fontSource);
     const lines = ["特别注意："];
     if (model.specialDelivery.address) {
       lines.push(`此次订单发货地址如下：${model.specialDelivery.address}`);
@@ -347,13 +389,31 @@ function renderRemarks(
         : "";
       lines.push(`收件人：${recipient}${phone}`);
     }
+    document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
+    const specialDeliveryText = lines.join("\n");
+    const specialDeliveryHeight = document.heightOfString(
+      specialDeliveryText,
+      {
+        width: contentWidth(document),
+        lineGap: BODY_LINE_GAP,
+      },
+    );
+    const pageBreak = ensureSpace(
+      document,
+      specialDeliveryHeight + 2,
+      fontSource,
+    );
+    if (pageBreak) {
+      document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
+    }
     document
       .fontSize(BODY_FONT_SIZE)
-      .text(lines.join("\n"), CONTENT_MARGIN, document.y, {
+      .text(specialDeliveryText, CONTENT_MARGIN, document.y, {
         width: contentWidth(document),
         lineGap: BODY_LINE_GAP,
       });
     document.y += 2;
+    applyFont(document, fontSource);
   }
 }
 
@@ -421,6 +481,35 @@ export function purchaseContractPdfPartyRows(
   ];
 }
 
+export function purchaseContractPdfPartyColumnLayout(
+  startX: number,
+  columnWidth: number,
+) {
+  return {
+    labelX: startX,
+    labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+    valueX: startX + PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+    valueWidth: columnWidth - PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH - 5,
+  };
+}
+
+export function purchaseContractPdfSharedPartyRowHeights(
+  buyerRows: ReturnType<typeof purchaseContractPdfPartyRows>,
+  sellerRows: ReturnType<typeof purchaseContractPdfPartyRows>,
+  measureValue: (value: string) => number,
+) {
+  return buyerRows.map((buyerRow, index) => {
+    if (buyerRow.label === "盖章") {
+      return 42;
+    }
+    return Math.max(
+      16,
+      measureValue(buyerRow.value) + 3,
+      measureValue(sellerRows[index].value) + 3,
+    );
+  });
+}
+
 function renderBottomPartyBlock(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
@@ -430,25 +519,27 @@ function renderBottomPartyBlock(
   const columnWidth = (contentWidth(document) - gap) / 2;
   const buyerRows = purchaseContractPdfPartyRows("买方", model.buyer);
   const sellerRows = purchaseContractPdfPartyRows("卖方", model.seller);
+  const buyerLayout = purchaseContractPdfPartyColumnLayout(
+    CONTENT_MARGIN,
+    columnWidth,
+  );
+  const sellerStartX = CONTENT_MARGIN + columnWidth + gap;
+  const sellerLayout = purchaseContractPdfPartyColumnLayout(
+    sellerStartX,
+    columnWidth,
+  );
   document.fontSize(BODY_FONT_SIZE);
-  const rowHeights = buyerRows.map((buyerRow, index) => {
-    const sellerRow = sellerRows[index];
-    if (buyerRow.label === "盖章") {
-      return 42;
-    }
-    return (
-      Math.max(
-        document.heightOfString(`${buyerRow.label}：${buyerRow.value}`, {
-          width: columnWidth - 5,
-          lineGap: 2,
-        }),
-        document.heightOfString(`${sellerRow.label}：${sellerRow.value}`, {
-          width: columnWidth - 5,
-          lineGap: 2,
-        }),
-      ) + 3
-    );
-  });
+  const rowHeights = purchaseContractPdfSharedPartyRowHeights(
+    buyerRows,
+    sellerRows,
+    (value) =>
+      value
+        ? document.heightOfString(value, {
+            width: buyerLayout.valueWidth,
+            lineGap: 2,
+          })
+        : 0,
+  );
   const blockHeight = rowHeights.reduce((sum, height) => sum + height, 0) + 14;
 
   const pageBreak = ensureSpace(document, blockHeight + 6, fontSource);
@@ -466,18 +557,24 @@ function renderBottomPartyBlock(
   let rowY = y + 7;
   buyerRows.forEach((buyerRow, index) => {
     const sellerRow = sellerRows[index];
-    document.fontSize(BODY_FONT_SIZE).text(
-      `${buyerRow.label}：${buyerRow.value}`,
-      CONTENT_MARGIN,
-      rowY,
-      { width: columnWidth - 5, lineGap: 2 },
-    );
-    document.text(
-      `${sellerRow.label}：${sellerRow.value}`,
-      separatorX + gap / 2,
-      rowY,
-      { width: columnWidth - 5, lineGap: 2 },
-    );
+    document
+      .fontSize(BODY_FONT_SIZE)
+      .text(`${buyerRow.label}：`, buyerLayout.labelX, rowY, {
+        width: buyerLayout.labelWidth,
+        lineGap: 2,
+      });
+    document.text(buyerRow.value, buyerLayout.valueX, rowY, {
+      width: buyerLayout.valueWidth,
+      lineGap: 2,
+    });
+    document.text(`${sellerRow.label}：`, sellerLayout.labelX, rowY, {
+      width: sellerLayout.labelWidth,
+      lineGap: 2,
+    });
+    document.text(sellerRow.value, sellerLayout.valueX, rowY, {
+      width: sellerLayout.valueWidth,
+      lineGap: 2,
+    });
     rowY += rowHeights[index];
   });
   document.y = y + blockHeight + 3;
@@ -507,7 +604,13 @@ function renderDocument(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
+  boldFontSource: PurchaseContractPdfFontSource,
 ) {
+  registerFont(
+    document,
+    PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
+    boldFontSource,
+  );
   applyFont(document, fontSource).fillColor("#111111");
   renderHeader(document, model);
   renderItemsTable(document, model, fontSource);
@@ -521,6 +624,8 @@ function renderDocument(
 export function renderPurchaseContractPdf(
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
+  boldFontSource: PurchaseContractPdfFontSource =
+    PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const document = new PDFDocument({
@@ -545,7 +650,7 @@ export function renderPurchaseContractPdf(
     document.on("error", reject);
 
     try {
-      renderDocument(document, model, fontSource);
+      renderDocument(document, model, fontSource, boldFontSource);
       document.end();
     } catch (error) {
       reject(error);

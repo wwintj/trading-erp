@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { accessSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import * as fontkit from "fontkit";
+import PDFDocument from "pdfkit";
 import { describe, expect, it, vi } from "vitest";
 
 import { Prisma } from "@/generated/prisma/client";
@@ -20,16 +22,25 @@ import {
   type PurchaseContractPdfSource,
 } from "@/lib/purchase-contract-pdf";
 import {
+  PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
+  PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+  PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN,
   PURCHASE_CONTRACT_PDF_LAYOUT,
+  PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
   PurchaseContractPdfFontError,
+  purchaseContractPdfHeaderMetadataLayout,
+  purchaseContractPdfPartyColumnLayout,
   purchaseContractPdfPartyRows,
+  purchaseContractPdfSharedPartyRowHeights,
   renderPurchaseContractPdf,
   resolvePurchaseContractPdfFontPath,
 } from "@/lib/purchase-contract-pdf.server";
 
 const SIMPLIFIED_CHINESE_CORE_SAMPLE =
   "采购合同合同编号签约时间签约地点买方卖方型号品名商标规格产地数量单价金额备注特别注意交货地址收件人验收方法包装要求货款结算运输方式合同变更解除争议违约责任附加条款";
+const SIMPLIFIED_CHINESE_BOLD_SAMPLE =
+  "特别注意此次订单发货地址如下收件人浙江省乐清市";
 
 function contractFixture(): PurchaseContractPdfSource {
   return {
@@ -134,6 +145,7 @@ describe("Purchase Contract PDF historical view model", () => {
           productCode: "WS-H42",
           productDescription: "PVC热收缩套管\n规格：42mm",
           quantity: "6400.000",
+          quantityDisplay: "6400.00",
           unit: "米",
           unitPrice: "0.9000",
           unitPriceDisplay: "¥0.90",
@@ -208,12 +220,22 @@ describe("Purchase Contract PDF historical view model", () => {
 
     expect(model.items[0]).toMatchObject({
       quantity: "6400.000",
+      quantityDisplay: "6400.00",
       unitPrice: "0.9000",
       unitPriceDisplay: "¥0.90",
       amount: "5760.00",
       amountDisplay: "¥5,760.00",
     });
     expect(model.totalAmount).toBe("5760.00");
+  });
+
+  it("right-aligns the complete header metadata block to the printable edge", () => {
+    const layout = purchaseContractPdfHeaderMetadataLayout();
+
+    expect(PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN).toBe("right");
+    expect(layout.align).toBe("right");
+    expect(layout.x + layout.width).toBeCloseTo(layout.rightEdge);
+    expect(layout.rightEdge).toBeCloseTo(595.22 - 36);
   });
 
   it("keeps logical remark lines and their original number markers", () => {
@@ -232,6 +254,8 @@ describe("Purchase Contract PDF historical view model", () => {
 
   it("keeps fixed buyer and seller rows when snapshot fields are empty", () => {
     const source = contractFixture();
+    source.buyerAddress =
+      "天津市和平区荣业大街与慎益大街交口新世界花园5-6-502";
     source.sellerAddress = null;
     source.sellerPhone = null;
     source.sellerContactName = null;
@@ -256,6 +280,23 @@ describe("Purchase Contract PDF historical view model", () => {
     ]);
     expect(buyerRows.slice(1).map((row) => row.label)).toEqual(
       sellerRows.slice(1).map((row) => row.label),
+    );
+
+    const columnLayout = purchaseContractPdfPartyColumnLayout(36, 251.61);
+    expect(columnLayout).toEqual({
+      labelX: 36,
+      labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+      valueX: 82,
+      valueWidth: 200.61,
+    });
+    const rowHeights = purchaseContractPdfSharedPartyRowHeights(
+      buyerRows,
+      sellerRows,
+      (value) => (value === source.buyerAddress ? 32 : value ? 12 : 0),
+    );
+    expect(rowHeights).toEqual([16, 35, 16, 16, 42]);
+    expect(columnLayout.valueX).toBe(
+      columnLayout.labelX + columnLayout.labelWidth,
     );
   });
 
@@ -339,14 +380,26 @@ describe("Purchase Contract PDF RMB uppercase formatting", () => {
 });
 
 describe("Purchase Contract PDF bundled Fandol font", () => {
-  it("exists as a readable regular OpenType font", () => {
+  it("includes readable regular and bold OpenType font files", () => {
     expect(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH).toBe(
       resolve("assets/fonts/FandolFang-Regular.otf"),
     );
+    expect(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH).toBe(
+      resolve("assets/fonts/FandolHei-Bold.otf"),
+    );
     expect(statSync(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH).isFile()).toBe(true);
+    expect(statSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH).isFile()).toBe(true);
     expect(() =>
       accessSync(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH, constants.R_OK),
     ).not.toThrow();
+    expect(() =>
+      accessSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH, constants.R_OK),
+    ).not.toThrow();
+    expect(
+      createHash("sha256")
+        .update(readFileSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH))
+        .digest("hex"),
+    ).toBe("42ca2de27b45e16a284768673b6205a5add9e17871ee0e7db9c0d03f061d96fd");
   });
 
   it("covers every required Simplified Chinese core glyph", () => {
@@ -363,6 +416,20 @@ describe("Purchase Contract PDF bundled Fandol font", () => {
     expect(missing).toEqual([]);
   });
 
+  it("uses the official bold face with complete special-delivery glyphs", () => {
+    const opened = fontkit.openSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
+    if (!("hasGlyphForCodePoint" in opened)) {
+      throw new Error("Expected a single OpenType font");
+    }
+    const missing = [...new Set(SIMPLIFIED_CHINESE_BOLD_SAMPLE)].filter(
+      (character) =>
+        !opened.hasGlyphForCodePoint(character.codePointAt(0) as number),
+    );
+
+    expect(opened.postscriptName).toBe("FandolHei-Bold");
+    expect(missing).toEqual([]);
+  });
+
   it("creates a one-page real PDF with the bundled font", async () => {
     const model = buildPurchaseContractPdfViewModel(contractFixture());
 
@@ -374,6 +441,25 @@ describe("Purchase Contract PDF bundled Fandol font", () => {
     expect(pdf.subarray(0, 5).toString("ascii")).toBe("%PDF-");
     expect(pdf.byteLength).toBeGreaterThan(10_000);
     expect(pdfPageCount(pdf)).toBe(1);
+  });
+
+  it("uses the bold face for special delivery and restores the body font", async () => {
+    const fontSpy = vi.spyOn(PDFDocument.prototype, "font");
+    try {
+      await renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(contractFixture()),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const fontCalls = fontSpy.mock.calls.map(([font]) => font);
+      const boldIndex = fontCalls.indexOf(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
+
+      expect(boldIndex).toBeGreaterThan(-1);
+      expect(fontCalls.slice(boldIndex + 1)).toContain(
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+    } finally {
+      fontSpy.mockRestore();
+    }
   });
 
   it("allows long stored terms to flow onto multiple pages", async () => {
@@ -410,6 +496,9 @@ describe("Purchase Contract PDF font resolution", () => {
     expect(assertReadable).toHaveBeenCalledWith(
       resolve("assets/fonts/FandolFang-Regular.otf"),
     );
+    expect(assertReadable).toHaveBeenCalledWith(
+      resolve("assets/fonts/FandolHei-Bold.otf"),
+    );
   });
 
   it("honors the optional font path override without a fallback", async () => {
@@ -421,7 +510,11 @@ describe("Purchase Contract PDF font resolution", () => {
         assertReadable,
       ),
     ).resolves.toBe("/opt/fonts/custom.otf");
-    expect(assertReadable).toHaveBeenCalledTimes(1);
+    expect(assertReadable).toHaveBeenCalledTimes(2);
+    expect(assertReadable).toHaveBeenNthCalledWith(
+      2,
+      PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
+    );
   });
 
   it("fails with a path-free application error when the font is missing", async () => {
@@ -431,6 +524,19 @@ describe("Purchase Contract PDF font resolution", () => {
         vi.fn().mockRejectedValue(new Error("ENOENT /private/missing.otf")),
       ),
     ).rejects.toEqual(new PurchaseContractPdfFontError());
+  });
+
+  it("fails with the same safe error when the bundled bold font is missing", async () => {
+    const assertReadable = vi.fn(async (fontPath: string) => {
+      if (fontPath === PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH) {
+        throw new Error("ENOENT /private/internal/FandolHei-Bold.otf");
+      }
+    });
+
+    await expect(
+      resolvePurchaseContractPdfFontPath({}, assertReadable),
+    ).rejects.toEqual(new PurchaseContractPdfFontError());
+    expect(assertReadable).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -81,7 +81,7 @@ Authenticated users can list and view products at `/products`. Administrators ca
 
 Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize or reopen them, or cancel Draft/Final contracts; regular users have read-only access. Both roles can export a formal PDF while a contract is Final; Draft and Cancelled contracts cannot be exported.
 
-Purchase Contract PDF export uses the bundled `assets/fonts/FandolFang-Regular.otf` by default, so a new VPS does not need a system Chinese-font package. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to use a different readable font file; an invalid override fails safely without falling back. FandolFang-Regular comes from the official Fandol package on CTAN and is distributed under GPLv3 with the GPL font exception; its unmodified upstream license is stored at `assets/fonts/COPYING-Fandol`.
+Purchase Contract PDF export uses the bundled `assets/fonts/FandolFang-Regular.otf` body font and `assets/fonts/FandolHei-Bold.otf` emphasis font, so a new VPS does not need a system Chinese-font package. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to use a different readable body font file; an invalid override fails safely without falling back. Both bundled fonts come from the official Fandol package on CTAN and are distributed under GPLv3 with the GPL font exception; their unmodified upstream license is stored at `assets/fonts/COPYING-Fandol`.
 
 ## Production migration
 

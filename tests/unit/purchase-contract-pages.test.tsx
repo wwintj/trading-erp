@@ -29,6 +29,7 @@ vi.mock("@/lib/purchase-contract.server", () => ({
 vi.mock("@/app/purchase-contracts/actions", () => ({
   savePurchaseContractAction: vi.fn(),
   finalizePurchaseContractAction: vi.fn(),
+  reopenPurchaseContractAction: vi.fn(),
   cancelPurchaseContractAction: vi.fn(),
 }));
 
@@ -42,6 +43,10 @@ import { Prisma } from "@/generated/prisma/client";
 import PurchaseContractPage from "@/app/purchase-contracts/[id]/page";
 import NewPurchaseContractPage from "@/app/purchase-contracts/new/page";
 import PurchaseContractsPage from "@/app/purchase-contracts/page";
+import {
+  PURCHASE_CONTRACT_STATUS_CONFIRMATIONS,
+  requestPurchaseContractStatusChange,
+} from "@/components/purchase-contract/purchase-contract-status-actions";
 
 const adminSession = { user: { email: "admin@example.com", role: "admin" } };
 const userSession = { user: { email: "user@example.com", role: "user" } };
@@ -228,6 +233,7 @@ describe("Purchase Contract pages", () => {
     expect(adminHtml).toContain("保存采购合同");
     expect(adminHtml).toContain("定稿采购合同");
     expect(adminHtml).toContain("取消采购合同");
+    expect(adminHtml).not.toContain("重新打开为草稿");
     expect(adminHtml).toContain('name="itemsJson"');
     expect(adminHtml).toContain("item-1");
 
@@ -249,6 +255,7 @@ describe("Purchase Contract pages", () => {
     );
     expect(finalHtml).toContain("已定稿");
     expect(finalHtml).not.toContain("保存采购合同");
+    expect(finalHtml).toContain("重新打开为草稿");
     expect(finalHtml).toContain("取消采购合同");
 
     mocks.getPurchaseContractById.mockResolvedValue(contract("CANCELLED"));
@@ -257,7 +264,33 @@ describe("Purchase Contract pages", () => {
     );
     expect(cancelledHtml).toContain("已取消");
     expect(cancelledHtml).not.toContain("保存采购合同");
+    expect(cancelledHtml).not.toContain("重新打开为草稿");
     expect(cancelledHtml).not.toContain("取消采购合同");
+  });
+
+  it("uses Chinese reopen confirmation and sends no mutation when cancelled", async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    const finalize = vi.fn();
+    const reopen = vi.fn();
+    const cancel = vi.fn();
+
+    await expect(
+      requestPurchaseContractStatusChange("contract-1", "reopen", {
+        confirm,
+        finalize,
+        reopen,
+        cancel,
+      }),
+    ).resolves.toBeNull();
+    expect(confirm).toHaveBeenCalledWith(
+      "确认重新打开该采购合同？重新打开后合同将恢复为草稿状态并可继续修改。",
+    );
+    expect(PURCHASE_CONTRACT_STATUS_CONFIRMATIONS.reopen).toBe(
+      "确认重新打开该采购合同？重新打开后合同将恢复为草稿状态并可继续修改。",
+    );
+    expect(finalize).not.toHaveBeenCalled();
+    expect(reopen).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it("uses normal not-found behavior for a missing contract", async () => {

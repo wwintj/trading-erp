@@ -364,6 +364,29 @@ export function finalizePurchaseContract(id: string) {
   );
 }
 
+export function reopenPurchaseContract(id: string) {
+  return db.$transaction(
+    async (transaction) => {
+      const contract = await transaction.purchaseContract.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!contract) {
+        throw new PurchaseContractNotFoundError();
+      }
+      if (contract.status !== "FINAL") {
+        throw new PurchaseContractImmutableError();
+      }
+
+      return transaction.purchaseContract.update({
+        where: { id },
+        data: { status: "DRAFT" },
+      });
+    },
+    { isolationLevel: "Serializable" },
+  );
+}
+
 export function cancelPurchaseContract(id: string) {
   return db.$transaction(
     async (transaction) => {

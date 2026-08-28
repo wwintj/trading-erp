@@ -103,46 +103,77 @@ describe("Purchase Contract save action", () => {
 });
 
 describe("Purchase Contract status actions", () => {
-  it("blocks a user from finalizing or cancelling server-side", async () => {
+  it("blocks a user from finalizing, reopening, or cancelling server-side", async () => {
     const finalize = vi.fn();
+    const reopen = vi.fn();
     const cancel = vi.fn();
-    for (const operation of ["finalize", "cancel"] as const) {
+    for (const operation of ["finalize", "reopen", "cancel"] as const) {
       const result = await executePurchaseContractStatusChange(
         "contract-1",
         operation,
         {
           getSession: vi.fn().mockResolvedValue({ user: { role: "user" } }),
           finalize,
+          reopen,
           cancel,
         },
       );
       expect(result.message).toBe(PURCHASE_CONTRACT_FORBIDDEN_MESSAGE);
     }
     expect(finalize).not.toHaveBeenCalled();
+    expect(reopen).not.toHaveBeenCalled();
     expect(cancel).not.toHaveBeenCalled();
   });
 
-  it("allows an admin to finalize and cancel with Chinese feedback", async () => {
+  it("blocks an unauthenticated reopen server-side", async () => {
+    const reopen = vi.fn();
+    const result = await executePurchaseContractStatusChange(
+      "contract-1",
+      "reopen",
+      {
+        getSession: vi.fn().mockResolvedValue(null),
+        finalize: vi.fn(),
+        reopen,
+        cancel: vi.fn(),
+      },
+    );
+
+    expect(result).toEqual({
+      status: "error",
+      message: PURCHASE_CONTRACT_SIGN_IN_MESSAGE,
+    });
+    expect(reopen).not.toHaveBeenCalled();
+  });
+
+  it("allows an admin to finalize, reopen, and cancel with Chinese feedback", async () => {
     const dependencies = {
       getSession: vi.fn().mockResolvedValue(adminSession),
       finalize: vi.fn().mockResolvedValue({}),
+      reopen: vi.fn().mockResolvedValue({}),
       cancel: vi.fn().mockResolvedValue({}),
     };
     await expect(
       executePurchaseContractStatusChange("contract-1", "finalize", dependencies),
     ).resolves.toMatchObject({ status: "success", message: "采购合同已定稿。" });
     await expect(
+      executePurchaseContractStatusChange("contract-1", "reopen", dependencies),
+    ).resolves.toMatchObject({
+      status: "success",
+      message: "采购合同已重新打开为草稿。",
+    });
+    await expect(
       executePurchaseContractStatusChange("contract-1", "cancel", dependencies),
     ).resolves.toMatchObject({ status: "success", message: "采购合同已取消。" });
   });
 
-  it("maps immutable status transitions to a safe Chinese error", async () => {
+  it("maps an immutable reopen to a safe Chinese error", async () => {
     const result = await executePurchaseContractStatusChange(
       "contract-1",
-      "finalize",
+      "reopen",
       {
         getSession: vi.fn().mockResolvedValue(adminSession),
-        finalize: vi.fn().mockRejectedValue(new PurchaseContractImmutableError()),
+        finalize: vi.fn(),
+        reopen: vi.fn().mockRejectedValue(new PurchaseContractImmutableError()),
         cancel: vi.fn(),
       },
     );

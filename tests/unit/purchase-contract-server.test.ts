@@ -45,6 +45,7 @@ import {
   createPurchaseContract,
   finalizePurchaseContract,
   listPurchaseContracts,
+  reopenPurchaseContract,
   suggestPurchaseContractNumber,
   updatePurchaseContract,
 } from "@/lib/purchase-contract.server";
@@ -413,6 +414,43 @@ describe("Purchase Contract persistence", () => {
     expect(mocks.transaction.purchaseContractItem.deleteMany).not.toHaveBeenCalled();
     expect(mocks.transaction.purchaseContract.update).not.toHaveBeenCalled();
   });
+
+  it("reopens Final as Draft in a Serializable transaction and changes only status", async () => {
+    mocks.transaction.purchaseContract.findUnique.mockResolvedValue({
+      status: "FINAL",
+    });
+
+    await reopenPurchaseContract("contract-1");
+
+    expect(mocks.runTransaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(mocks.transaction.purchaseContract.findUnique).toHaveBeenCalledWith({
+      where: { id: "contract-1" },
+      select: { status: true },
+    });
+    expect(mocks.transaction.purchaseContract.update).toHaveBeenCalledWith({
+      where: { id: "contract-1" },
+      data: { status: "DRAFT" },
+    });
+    expect(mocks.transaction.purchaseContractItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.transaction.purchaseContractItem.update).not.toHaveBeenCalled();
+    expect(mocks.transaction.company.findUnique).not.toHaveBeenCalled();
+    expect(mocks.transaction.supplier.findUnique).not.toHaveBeenCalled();
+    expect(mocks.transaction.product.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(["DRAFT", "CANCELLED"])(
+    "does not reopen a %s contract",
+    async (status) => {
+      mocks.transaction.purchaseContract.findUnique.mockResolvedValue({ status });
+
+      await expect(
+        reopenPurchaseContract("contract-1"),
+      ).rejects.toBeInstanceOf(PurchaseContractImmutableError);
+      expect(mocks.transaction.purchaseContract.update).not.toHaveBeenCalled();
+    },
+  );
 
   it("revalidates exact totals while finalizing and permits Final cancellation", async () => {
     mocks.transaction.purchaseContract.findUnique.mockResolvedValueOnce({

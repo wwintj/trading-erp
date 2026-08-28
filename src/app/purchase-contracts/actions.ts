@@ -29,6 +29,15 @@ export async function finalizePurchaseContractAction(contractId: string) {
   return result;
 }
 
+export async function reopenPurchaseContractAction(contractId: string) {
+  const result = await executePurchaseContractStatusChange(contractId, "reopen");
+  if (result.status === "success") {
+    revalidatePath("/purchase-contracts");
+    revalidatePath(`/purchase-contracts/${contractId}`);
+  }
+  return result;
+}
+
 export async function cancelPurchaseContractAction(contractId: string) {
   const result = await executePurchaseContractStatusChange(contractId, "cancel");
   if (result.status === "success") {

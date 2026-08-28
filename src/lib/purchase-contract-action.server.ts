@@ -18,6 +18,7 @@ import {
   cancelPurchaseContract,
   createPurchaseContract,
   finalizePurchaseContract,
+  reopenPurchaseContract,
   updatePurchaseContract,
 } from "@/lib/purchase-contract.server";
 
@@ -96,18 +97,20 @@ export async function executePurchaseContractSave(
 type StatusDependencies = {
   getSession: () => Promise<ContractActionSession | null>;
   finalize: typeof finalizePurchaseContract;
+  reopen: typeof reopenPurchaseContract;
   cancel: typeof cancelPurchaseContract;
 };
 
 const defaultStatusDependencies: StatusDependencies = {
   getSession: getCurrentSession,
   finalize: finalizePurchaseContract,
+  reopen: reopenPurchaseContract,
   cancel: cancelPurchaseContract,
 };
 
 export async function executePurchaseContractStatusChange(
   contractId: string,
-  operation: "finalize" | "cancel",
+  operation: "finalize" | "reopen" | "cancel",
   dependencies: StatusDependencies = defaultStatusDependencies,
 ): Promise<PurchaseContractFormState> {
   const session = await dependencies.getSession();
@@ -122,6 +125,14 @@ export async function executePurchaseContractStatusChange(
     if (operation === "finalize") {
       await dependencies.finalize(contractId);
       return { status: "success", message: "采购合同已定稿。", contractId };
+    }
+    if (operation === "reopen") {
+      await dependencies.reopen(contractId);
+      return {
+        status: "success",
+        message: "采购合同已重新打开为草稿。",
+        contractId,
+      };
     }
 
     await dependencies.cancel(contractId);

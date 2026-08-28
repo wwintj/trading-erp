@@ -8,6 +8,7 @@ import {
 } from "@/components/purchase-contract/purchase-contract-form";
 import { PurchaseContractShell } from "@/components/purchase-contract/purchase-contract-shell";
 import { PurchaseContractStatusActions } from "@/components/purchase-contract/purchase-contract-status-actions";
+import { Button } from "@/components/ui/button";
 import { getCurrentSession } from "@/lib/auth-session";
 import { getServerEnv } from "@/lib/env";
 import {
@@ -60,7 +61,9 @@ export default async function PurchaseContractPage({
       appName={APP_NAME}
       title={contract.contractNo}
       description={`${PURCHASE_CONTRACT_STATUS_LABELS[status]} · ${contract.sellerLegalName}`}
-      actions={<ContractListLink />}
+      actions={
+        <ContractPageActions contractId={contract.id} status={status} />
+      }
     >
       {canEdit && options ? (
         <PurchaseContractForm
@@ -225,5 +228,24 @@ function ContractListLink() {
     >
       ← 返回采购合同列表
     </Link>
+  );
+}
+
+function ContractPageActions({
+  contractId,
+  status,
+}: {
+  contractId: string;
+  status: PurchaseContractStatus;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <ContractListLink />
+      {status === "FINAL" ? (
+        <Button variant="outline" asChild>
+          <a href={`/purchase-contracts/${contractId}/pdf`}>导出 PDF</a>
+        </Button>
+      ) : null}
+    </div>
   );
 }

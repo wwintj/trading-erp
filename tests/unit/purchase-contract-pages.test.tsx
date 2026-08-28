@@ -234,6 +234,7 @@ describe("Purchase Contract pages", () => {
     expect(adminHtml).toContain("定稿采购合同");
     expect(adminHtml).toContain("取消采购合同");
     expect(adminHtml).not.toContain("重新打开为草稿");
+    expect(adminHtml).not.toContain("导出 PDF");
     expect(adminHtml).toContain('name="itemsJson"');
     expect(adminHtml).toContain("item-1");
 
@@ -257,6 +258,11 @@ describe("Purchase Contract pages", () => {
     expect(finalHtml).not.toContain("保存采购合同");
     expect(finalHtml).toContain("重新打开为草稿");
     expect(finalHtml).toContain("取消采购合同");
+    expect(finalHtml).toContain(
+      'href="/purchase-contracts/contract-1/pdf"',
+    );
+    expect(finalHtml).toContain("导出 PDF");
+    expect(finalHtml).toContain("border border-neutral-200 bg-white");
 
     mocks.getPurchaseContractById.mockResolvedValue(contract("CANCELLED"));
     const cancelledHtml = renderToStaticMarkup(
@@ -266,6 +272,21 @@ describe("Purchase Contract pages", () => {
     expect(cancelledHtml).not.toContain("保存采购合同");
     expect(cancelledHtml).not.toContain("重新打开为草稿");
     expect(cancelledHtml).not.toContain("取消采购合同");
+    expect(cancelledHtml).not.toContain("导出 PDF");
+  });
+
+  it("shows Final PDF export to a regular user without admin status actions", async () => {
+    mocks.getCurrentSession.mockResolvedValue(userSession);
+    mocks.getPurchaseContractById.mockResolvedValue(contract("FINAL"));
+
+    const html = renderToStaticMarkup(
+      await PurchaseContractPage({ params: Promise.resolve({ id: "contract-1" }) }),
+    );
+
+    expect(html).toContain("导出 PDF");
+    expect(html).toContain('href="/purchase-contracts/contract-1/pdf"');
+    expect(html).not.toContain("重新打开为草稿");
+    expect(html).not.toContain("取消采购合同");
   });
 
   it("uses Chinese reopen confirmation and sends no mutation when cancelled", async () => {

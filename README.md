@@ -1,6 +1,6 @@
 # Trading ERP
 
-Trading ERP is currently at **Step 0.6: Purchase Contract**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, Company, Supplier, and Product master data, and Purchase Contracts with line items and Draft/Final/Cancelled status handling.
+Trading ERP is currently at **Step 0.7: Purchase Contract PDF Export**. It provides a Next.js application, Prisma with MySQL, Better Auth email/password sign-in, database-backed sessions, the built-in `admin`/`user` roles, authenticated self-service password changes, Company, Supplier, and Product master data, and Purchase Contracts with line items, Draft/Final/Cancelled status handling, and formal PDF export for Final contracts.
 
 ## Requirements
 
@@ -69,7 +69,9 @@ Authenticated users can list and view suppliers at `/suppliers`. Administrators 
 
 Authenticated users can list and view products at `/products`. Administrators can create and edit products; regular users have read-only access.
 
-Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize them, or cancel Draft/Final contracts; regular users have read-only access.
+Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize or reopen them, or cancel Draft/Final contracts; regular users have read-only access. Both roles can export a formal PDF while a contract is Final; Draft and Cancelled contracts cannot be exported.
+
+Production PDF export requires the `fonts-cwtex-fs` Ubuntu package and uses cwTeXFangSong at `/usr/share/fonts/truetype/cwtex/cwfs.ttf`. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to override that path. Font files are deployment dependencies and are not stored in this repository.
 
 ## Production migration
 
@@ -104,7 +106,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, and readiness integration must be verified against MySQL after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, PDF export with MySQL snapshots and cwTeX FangSong rendering, and readiness integration must be verified after deployment.
 
 ## Database development
 

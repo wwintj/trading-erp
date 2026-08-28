@@ -57,6 +57,7 @@ for (const path of [
   "/purchase-contracts",
   "/purchase-contracts/new",
   "/purchase-contracts/missing-id",
+  "/purchase-contracts/missing-id/pdf",
 ]) {
   test(`unauthenticated ${path} redirects to login`, async ({ page }) => {
     await page.goto(path);

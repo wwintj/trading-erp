@@ -66,7 +66,7 @@ describe("Supplier save action", () => {
 
     expect(result).toEqual({
       status: "success",
-      message: "Supplier created successfully.",
+      message: "供应商创建成功。",
       supplierId: "supplier-1",
     });
     expect(create).toHaveBeenCalledWith({
@@ -99,7 +99,7 @@ describe("Supplier save action", () => {
 
     expect(result).toEqual({
       status: "success",
-      message: "Supplier updated successfully.",
+      message: "供应商保存成功。",
       supplierId: "supplier-1",
     });
     expect(update).toHaveBeenCalledWith(
@@ -124,9 +124,9 @@ describe("Supplier save action", () => {
     expect(result).toMatchObject({
       status: "error",
       fieldErrors: {
-        code: "Supplier code is required.",
-        legalName: "Legal name is required.",
-        email: "Enter a valid email address.",
+        code: "请输入供应商代码。",
+        legalName: "请输入公司全称。",
+        email: "请输入有效的邮箱地址。",
       },
     });
     expect(create).not.toHaveBeenCalled();

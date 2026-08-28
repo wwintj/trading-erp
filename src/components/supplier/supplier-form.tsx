@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { saveSupplierAction } from "@/app/suppliers/actions";
@@ -43,7 +44,7 @@ export function SupplierForm({
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-code">Supplier code / 供应商代码</Label>
+        <Label htmlFor="supplier-code">供应商代码</Label>
         <Input
           id="supplier-code"
           name="code"
@@ -58,7 +59,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-legal-name">Legal name / 公司全称</Label>
+        <Label htmlFor="supplier-legal-name">公司全称</Label>
         <Input
           id="supplier-legal-name"
           name="legalName"
@@ -76,7 +77,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-short-name">Short name / 公司简称</Label>
+        <Label htmlFor="supplier-short-name">公司简称</Label>
         <Input
           id="supplier-short-name"
           name="shortName"
@@ -93,9 +94,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-unified-credit-code">
-          Unified social credit code / 统一社会信用代码
-        </Label>
+        <Label htmlFor="supplier-unified-credit-code">统一社会信用代码</Label>
         <Input
           id="supplier-unified-credit-code"
           name="unifiedCreditCode"
@@ -112,7 +111,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-contact-name">Contact name / 联系人</Label>
+        <Label htmlFor="supplier-contact-name">联系人</Label>
         <Input
           id="supplier-contact-name"
           name="contactName"
@@ -129,7 +128,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-phone">Phone / 电话</Label>
+        <Label htmlFor="supplier-phone">电话</Label>
         <Input
           id="supplier-phone"
           name="phone"
@@ -144,7 +143,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-email">Email / 邮箱</Label>
+        <Label htmlFor="supplier-email">邮箱</Label>
         <Input
           id="supplier-email"
           name="email"
@@ -159,7 +158,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-address">Address / 地址</Label>
+        <Label htmlFor="supplier-address">地址</Label>
         <Textarea
           id="supplier-address"
           name="address"
@@ -176,7 +175,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-bank-name">Bank name / 开户行</Label>
+        <Label htmlFor="supplier-bank-name">开户行</Label>
         <Input
           id="supplier-bank-name"
           name="bankName"
@@ -193,7 +192,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-bank-account">Bank account / 银行账号</Label>
+        <Label htmlFor="supplier-bank-account">银行账号</Label>
         <Input
           id="supplier-bank-account"
           name="bankAccount"
@@ -210,7 +209,7 @@ export function SupplierForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supplier-notes">Notes / 备注</Label>
+        <Label htmlFor="supplier-notes">备注</Label>
         <Textarea
           id="supplier-notes"
           name="notes"
@@ -223,9 +222,20 @@ export function SupplierForm({
         <FieldError id="supplier-notes-error" message={state.fieldErrors?.notes} />
       </div>
 
-      <Button type="submit" variant="default" disabled={pending}>
-        {pending ? "Saving…" : supplierId ? "Save Supplier" : "Create Supplier"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3 pt-2">
+        <Button variant="outline" asChild>
+          <Link href="/suppliers">取消</Link>
+        </Button>
+        <Button type="submit" variant="default" disabled={pending}>
+          {pending
+            ? supplierId
+              ? "正在保存…"
+              : "正在创建…"
+            : supplierId
+              ? "保存供应商"
+              : "创建供应商"}
+        </Button>
+      </div>
     </form>
   );
 }

@@ -163,7 +163,11 @@ describe("Supplier pages", () => {
     expect(html).toContain("HYS");
     expect(html).toContain("惠州市华业升塑胶制品有限公司");
     expect(html).toContain("Test Contact");
-    expect(html).not.toContain("Save Supplier");
+    expect(html).toContain("供应商代码");
+    expect(html).toContain("公司全称");
+    expect(html).toContain("统一社会信用代码");
+    expect(html).toContain("← 返回供应商列表");
+    expect(html).not.toContain("保存供应商");
   });
 
   it("uses normal Next.js not-found behavior for a missing Supplier", async () => {
@@ -176,17 +180,35 @@ describe("Supplier pages", () => {
     expect(mocks.notFound).toHaveBeenCalledOnce();
   });
 
-  it("renders Create Supplier with the shared primary Button styling", async () => {
+  it("renders localized create actions with the shared primary Button styling", async () => {
     mocks.getCurrentSession.mockResolvedValue(adminSession);
 
     const html = renderToStaticMarkup(await NewSupplierPage());
     const createButton = html.match(
-      /<button[^>]*>Create Supplier<\/button>/,
+      /<button[^>]*>创建供应商<\/button>/,
     )?.[0];
 
+    expect(html).toContain("新建供应商");
+    expect(html).toContain("← 返回供应商列表");
+    expect(html).toContain(">取消</a>");
+    expect(html.match(/← 返回供应商列表/g)).toHaveLength(1);
     expect(createButton).toContain("bg-[#16A34A]");
     expect(createButton).toContain("hover:bg-[#15803D]");
     expect(createButton).toContain("text-white");
     expect(createButton).not.toContain("bg-white");
+  });
+
+  it("renders localized edit actions without duplicating the primary action", async () => {
+    mocks.getCurrentSession.mockResolvedValue(adminSession);
+    mocks.getSupplierById.mockResolvedValue(supplier);
+
+    const html = renderToStaticMarkup(
+      await SupplierPage({ params: Promise.resolve({ id: supplier.id }) }),
+    );
+
+    expect(html).toContain("← 返回供应商列表");
+    expect(html).toContain(">取消</a>");
+    expect(html.match(/保存供应商/g)).toHaveLength(1);
+    expect(html).not.toContain("Save Supplier");
   });
 });

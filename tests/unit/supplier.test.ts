@@ -35,8 +35,8 @@ describe("Supplier validation", () => {
     expect(result).toEqual({
       ok: false,
       fieldErrors: {
-        code: "Supplier code is required.",
-        legalName: "Legal name is required.",
+        code: "请输入供应商代码。",
+        legalName: "请输入公司全称。",
       },
     });
   });
@@ -69,7 +69,7 @@ describe("Supplier validation", () => {
 
     expect(result).toEqual({
       ok: false,
-      fieldErrors: { email: "Enter a valid email address." },
+      fieldErrors: { email: "请输入有效的邮箱地址。" },
     });
   });
 

@@ -1,10 +1,10 @@
 export const SUPPLIER_GENERIC_ERROR_MESSAGE =
-  "Unable to save Supplier. Please try again.";
+  "供应商保存失败，请稍后重试。";
 export const SUPPLIER_DUPLICATE_CODE_MESSAGE =
-  "Supplier code already exists.";
+  "供应商代码已存在。";
 export const SUPPLIER_FORBIDDEN_MESSAGE =
-  "You do not have permission to change Supplier.";
-export const SUPPLIER_SIGN_IN_MESSAGE = "You must sign in to change Supplier.";
+  "你没有权限修改供应商。";
+export const SUPPLIER_SIGN_IN_MESSAGE = "请先登录后再修改供应商。";
 
 export const SUPPLIER_FIELD_LIMITS = {
   code: 64,
@@ -83,17 +83,17 @@ export function validateSupplierForm(formData: FormData):
   const fieldErrors: Partial<Record<SupplierField, string>> = {};
 
   if (!values.code) {
-    fieldErrors.code = "Supplier code is required.";
+    fieldErrors.code = "请输入供应商代码。";
   }
 
   if (!values.legalName) {
-    fieldErrors.legalName = "Legal name is required.";
+    fieldErrors.legalName = "请输入公司全称。";
   }
 
   for (const field of Object.keys(SUPPLIER_FIELD_LIMITS) as SupplierField[]) {
     const limit = SUPPLIER_FIELD_LIMITS[field];
     if (values[field].length > limit) {
-      fieldErrors[field] = `Must be ${limit} characters or fewer.`;
+      fieldErrors[field] = `不能超过 ${limit} 个字符。`;
     }
   }
 
@@ -101,7 +101,7 @@ export function validateSupplierForm(formData: FormData):
     values.email &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)
   ) {
-    fieldErrors.email = "Enter a valid email address.";
+    fieldErrors.email = "请输入有效的邮箱地址。";
   }
 
   if (Object.keys(fieldErrors).length > 0) {

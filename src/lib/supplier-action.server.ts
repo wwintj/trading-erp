@@ -52,7 +52,7 @@ export async function executeSupplierSave(
   if (!validation.ok) {
     return {
       status: "error",
-      message: "Please correct the highlighted fields.",
+      message: "请检查并修正标记的字段。",
       fieldErrors: validation.fieldErrors,
     };
   }
@@ -71,8 +71,8 @@ export async function executeSupplierSave(
     return {
       status: "success",
       message: supplierId
-        ? "Supplier updated successfully."
-        : "Supplier created successfully.",
+        ? "供应商保存成功。"
+        : "供应商创建成功。",
       supplierId: supplier.id,
     };
   } catch (error) {

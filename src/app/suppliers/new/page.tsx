@@ -4,13 +4,12 @@ import { redirect } from "next/navigation";
 
 import { SupplierForm } from "@/components/supplier/supplier-form";
 import { SupplierShell } from "@/components/supplier/supplier-shell";
-import { Button } from "@/components/ui/button";
 import { getCurrentSession } from "@/lib/auth-session";
 import { getServerEnv } from "@/lib/env";
 import type { SupplierInput } from "@/lib/supplier";
 
 export const metadata: Metadata = {
-  title: "New Supplier",
+  title: "新建供应商",
 };
 
 const emptySupplier: SupplierInput = {
@@ -43,12 +42,15 @@ export default async function NewSupplierPage() {
   return (
     <SupplierShell
       appName={APP_NAME}
-      title="New Supplier"
+      title="新建供应商"
       description={session.user.email}
       actions={
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/suppliers">Back to Suppliers</Link>
-        </Button>
+        <Link
+          href="/suppliers"
+          className="text-sm font-medium text-neutral-600 transition-colors hover:text-neutral-950 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2"
+        >
+          ← 返回供应商列表
+        </Link>
       }
     >
       <SupplierForm supplierId={null} initialValues={emptySupplier} />

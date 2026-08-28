@@ -11,12 +11,12 @@ describe("Supplier save Toast feedback", () => {
     const notification = { success: vi.fn(), error: vi.fn() };
 
     notifySupplierSave(
-      { status: "success", message: "Supplier created successfully." },
+      { status: "success", message: "供应商创建成功。" },
       notification,
     );
 
     expect(notification.success).toHaveBeenCalledWith(
-      "Supplier created successfully.",
+      "供应商创建成功。",
     );
     expect(notification.error).not.toHaveBeenCalled();
   });

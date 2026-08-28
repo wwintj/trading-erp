@@ -4,14 +4,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { SupplierForm } from "@/components/supplier/supplier-form";
 import { SupplierShell } from "@/components/supplier/supplier-shell";
-import { Button } from "@/components/ui/button";
 import { getCurrentSession } from "@/lib/auth-session";
 import { getServerEnv } from "@/lib/env";
 import type { SupplierInput } from "@/lib/supplier";
 import { getSupplierById } from "@/lib/supplier.server";
 
 export const metadata: Metadata = {
-  title: "Supplier",
+  title: "供应商",
 };
 
 export default async function SupplierPage({
@@ -35,16 +34,14 @@ export default async function SupplierPage({
     return (
       <SupplierShell
         appName={APP_NAME}
-        title="Supplier"
+        title="供应商"
         description={session.user.email}
         actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/suppliers">Back to Suppliers</Link>
-          </Button>
+          <SupplierListLink />
         }
       >
         <p role="alert" className="text-sm text-red-700">
-          Supplier information is temporarily unavailable.
+          供应商信息暂时无法加载，请稍后重试。
         </p>
       </SupplierShell>
     );
@@ -61,11 +58,7 @@ export default async function SupplierPage({
       appName={APP_NAME}
       title={supplier.code}
       description={supplier.legalName}
-      actions={
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/suppliers">Back to Suppliers</Link>
-        </Button>
-      }
+      actions={<SupplierListLink />}
     >
       {canEdit ? (
         <SupplierForm supplierId={supplier.id} initialValues={supplier} />
@@ -78,17 +71,17 @@ export default async function SupplierPage({
 
 function SupplierDetails({ supplier }: { supplier: SupplierInput }) {
   const fields = [
-    ["Supplier code / 供应商代码", supplier.code],
-    ["Legal name / 公司全称", supplier.legalName],
-    ["Short name / 公司简称", supplier.shortName],
-    ["Unified social credit code / 统一社会信用代码", supplier.unifiedCreditCode],
-    ["Contact name / 联系人", supplier.contactName],
-    ["Phone / 电话", supplier.phone],
-    ["Email / 邮箱", supplier.email],
-    ["Address / 地址", supplier.address],
-    ["Bank name / 开户行", supplier.bankName],
-    ["Bank account / 银行账号", supplier.bankAccount],
-    ["Notes / 备注", supplier.notes],
+    ["供应商代码", supplier.code],
+    ["公司全称", supplier.legalName],
+    ["公司简称", supplier.shortName],
+    ["统一社会信用代码", supplier.unifiedCreditCode],
+    ["联系人", supplier.contactName],
+    ["电话", supplier.phone],
+    ["邮箱", supplier.email],
+    ["地址", supplier.address],
+    ["开户行", supplier.bankName],
+    ["银行账号", supplier.bankAccount],
+    ["备注", supplier.notes],
   ];
 
   return (
@@ -100,5 +93,16 @@ function SupplierDetails({ supplier }: { supplier: SupplierInput }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function SupplierListLink() {
+  return (
+    <Link
+      href="/suppliers"
+      className="text-sm font-medium text-neutral-600 transition-colors hover:text-neutral-950 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2"
+    >
+      ← 返回供应商列表
+    </Link>
   );
 }

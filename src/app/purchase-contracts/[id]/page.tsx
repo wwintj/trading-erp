@@ -103,6 +103,7 @@ function toFormValues(
     disputeTerms: contract.disputeTerms,
     additionalTerms: contract.additionalTerms,
     items: contract.items.map((item) => ({
+      itemId: item.id,
       productId: item.productId,
       quantity: item.quantity.toString(),
       unitPrice: item.unitPrice.toString(),

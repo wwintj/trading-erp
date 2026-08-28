@@ -99,6 +99,56 @@ const product = {
   unit: "米",
 };
 
+function existingDraftContract() {
+  return {
+    id: "contract-1",
+    status: "DRAFT",
+    companyId: "company-1",
+    supplierId: "supplier-1",
+    buyerLegalName: "旧买方名称",
+    buyerUnifiedCreditCode: "old-buyer-credit",
+    buyerContactName: "Old Buyer Contact",
+    buyerPhone: "old-buyer-phone",
+    buyerAddress: "old-buyer-address",
+    buyerBankName: "old-buyer-bank",
+    buyerBankAccount: "old-buyer-account",
+    sellerLegalName: "旧卖方名称",
+    sellerUnifiedCreditCode: "old-seller-credit",
+    sellerContactName: "Old Seller Contact",
+    sellerPhone: "old-seller-phone",
+    sellerAddress: "old-seller-address",
+    sellerBankName: "old-seller-bank",
+    sellerBankAccount: "old-seller-account",
+    items: [
+      {
+        id: "item-1",
+        productId: "product-1",
+        productCode: "WS-H42",
+        productName: "PVC热收缩套管",
+        specification: "旧规格",
+        unit: "米",
+      },
+    ],
+  };
+}
+
+function draftUpdateInput(
+  overrides: Partial<PurchaseContractInput> = {},
+): PurchaseContractInput {
+  return {
+    ...input,
+    items: [
+      {
+        itemId: "item-1",
+        productId: "product-1",
+        quantity: "6400",
+        unitPrice: "0.900",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 describe("Purchase Contract persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -112,6 +162,9 @@ describe("Purchase Contract persistence", () => {
     mocks.transaction.company.findUnique.mockResolvedValue(company);
     mocks.transaction.supplier.findUnique.mockResolvedValue(supplier);
     mocks.transaction.product.findMany.mockResolvedValue([product]);
+    mocks.transaction.purchaseContract.findUnique.mockResolvedValue(
+      existingDraftContract(),
+    );
     mocks.transaction.purchaseContract.create.mockResolvedValue({ id: "contract-1" });
     mocks.transaction.purchaseContract.update.mockResolvedValue({ id: "contract-1" });
     mocks.transaction.purchaseContractItem.deleteMany.mockResolvedValue({ count: 1 });
@@ -190,9 +243,7 @@ describe("Purchase Contract persistence", () => {
   });
 
   it("atomically replaces items only while the contract remains Draft", async () => {
-    mocks.transaction.purchaseContract.findUnique.mockResolvedValue({ status: "DRAFT" });
-
-    await updatePurchaseContract("contract-1", input);
+    await updatePurchaseContract("contract-1", draftUpdateInput());
 
     expect(mocks.transaction.purchaseContractItem.deleteMany).toHaveBeenCalledWith({
       where: { purchaseContractId: "contract-1" },
@@ -200,11 +251,167 @@ describe("Purchase Contract persistence", () => {
     expect(mocks.transaction.purchaseContract.update).toHaveBeenCalledOnce();
 
     for (const status of ["FINAL", "CANCELLED"]) {
-      mocks.transaction.purchaseContract.findUnique.mockResolvedValue({ status });
-      await expect(updatePurchaseContract("contract-1", input)).rejects.toBeInstanceOf(
-        PurchaseContractImmutableError,
-      );
+      mocks.transaction.purchaseContract.findUnique.mockResolvedValue({
+        ...existingDraftContract(),
+        status,
+      });
+      await expect(
+        updatePurchaseContract("contract-1", draftUpdateInput()),
+      ).rejects.toBeInstanceOf(PurchaseContractImmutableError);
     }
+  });
+
+  it("preserves the buyer snapshot when companyId is unchanged", async () => {
+    company.legalName = "新买方名称";
+
+    await updatePurchaseContract("contract-1", draftUpdateInput({
+      paymentTerms: "保存无关字段",
+    }));
+
+    const updateData = mocks.transaction.purchaseContract.update.mock.calls[0][0].data;
+    expect(updateData.buyerLegalName).toBe("旧买方名称");
+    expect(updateData.buyerBankAccount).toBe("old-buyer-account");
+    expect(mocks.transaction.company.findUnique).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+    });
+  });
+
+  it("preserves the seller snapshot when supplierId is unchanged", async () => {
+    supplier.legalName = "新卖方名称";
+
+    await updatePurchaseContract("contract-1", draftUpdateInput({
+      paymentTerms: "保存无关字段",
+    }));
+
+    const updateData = mocks.transaction.purchaseContract.update.mock.calls[0][0].data;
+    expect(updateData.sellerLegalName).toBe("旧卖方名称");
+    expect(updateData.sellerBankAccount).toBe("old-seller-account");
+    expect(mocks.transaction.supplier.findUnique).toHaveBeenCalledWith({
+      where: { id: "supplier-1" },
+    });
+  });
+
+  it("preserves an existing item snapshot when productId is unchanged", async () => {
+    product.name = "主数据中的新产品名称";
+
+    await updatePurchaseContract("contract-1", draftUpdateInput());
+
+    const itemData =
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data.items.create[0];
+    expect(itemData).toMatchObject({
+      productCode: "WS-H42",
+      productName: "PVC热收缩套管",
+      specification: "旧规格",
+      unit: "米",
+    });
+  });
+
+  it("refreshes the buyer snapshot when companyId changes", async () => {
+    mocks.transaction.company.findUnique.mockResolvedValue({
+      ...company,
+      id: "company-2",
+      legalName: "新买方名称",
+      bankAccount: "new-buyer-account",
+    });
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({ companyId: "company-2" }),
+    );
+
+    const updateData = mocks.transaction.purchaseContract.update.mock.calls[0][0].data;
+    expect(updateData.buyerLegalName).toBe("新买方名称");
+    expect(updateData.buyerBankAccount).toBe("new-buyer-account");
+  });
+
+  it("refreshes the seller snapshot when supplierId changes", async () => {
+    mocks.transaction.supplier.findUnique.mockResolvedValue({
+      ...supplier,
+      id: "supplier-2",
+      legalName: "新卖方名称",
+      bankAccount: "new-seller-account",
+    });
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({ supplierId: "supplier-2" }),
+    );
+
+    const updateData = mocks.transaction.purchaseContract.update.mock.calls[0][0].data;
+    expect(updateData.sellerLegalName).toBe("新卖方名称");
+    expect(updateData.sellerBankAccount).toBe("new-seller-account");
+  });
+
+  it("refreshes an existing item snapshot when productId changes", async () => {
+    mocks.transaction.product.findMany.mockResolvedValue([
+      {
+        ...product,
+        id: "product-2",
+        code: "NEW-2",
+        name: "新选择的产品",
+        specification: "新规格",
+        unit: "件",
+      },
+    ]);
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({
+        items: [
+          {
+            itemId: "item-1",
+            productId: "product-2",
+            quantity: "2",
+            unitPrice: "3",
+          },
+        ],
+      }),
+    );
+
+    const itemData =
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data.items.create[0];
+    expect(itemData).toMatchObject({
+      productId: "product-2",
+      productCode: "NEW-2",
+      productName: "新选择的产品",
+      specification: "新规格",
+      unit: "件",
+    });
+  });
+
+  it("creates a current Product snapshot for a new row without itemId", async () => {
+    product.name = "新增行当前产品名称";
+
+    await updatePurchaseContract("contract-1", draftUpdateInput({
+      items: [{ productId: "product-1", quantity: "2", unitPrice: "3" }],
+    }));
+
+    const itemData =
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data.items.create[0];
+    expect(itemData.productName).toBe("新增行当前产品名称");
+    expect(itemData.sortOrder).toBe(0);
+  });
+
+  it("safely rejects an itemId that does not belong to the contract", async () => {
+    await expect(
+      updatePurchaseContract(
+        "contract-1",
+        draftUpdateInput({
+          items: [
+            {
+              itemId: "item-from-another-contract",
+              productId: "product-1",
+              quantity: "6400",
+              unitPrice: "0.900",
+            },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      fieldErrors: { "items.0.itemId": "合同明细身份无效。" },
+    } satisfies Partial<PurchaseContractValidationError>);
+    expect(mocks.transaction.purchaseContractItem.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.transaction.purchaseContract.update).not.toHaveBeenCalled();
   });
 
   it("revalidates exact totals while finalizing and permits Final cancellation", async () => {

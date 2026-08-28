@@ -39,6 +39,7 @@ export const PURCHASE_CONTRACT_STATUS_LABELS: Record<
 };
 
 export type PurchaseContractItemInput = {
+  itemId?: string;
   productId: string;
   quantity: string;
   unitPrice: string;
@@ -304,10 +305,22 @@ export function validatePurchaseContractForm(formData: FormData):
           : {};
       const productId =
         typeof item.productId === "string" ? item.productId.trim() : "";
+      const itemId =
+        typeof item.itemId === "string" && item.itemId.trim()
+          ? item.itemId.trim()
+          : undefined;
       const quantity =
         typeof item.quantity === "string" ? item.quantity.trim() : "";
       const unitPrice =
         typeof item.unitPrice === "string" ? item.unitPrice.trim() : "";
+
+      if (
+        item.itemId !== undefined &&
+        item.itemId !== null &&
+        typeof item.itemId !== "string"
+      ) {
+        fieldErrors[`items.${index}.itemId`] = "合同明细身份无效。";
+      }
 
       if (!productId) {
         fieldErrors[`items.${index}.productId`] = "请选择产品。";
@@ -326,7 +339,7 @@ export function validatePurchaseContractForm(formData: FormData):
           "请输入大于等于 0、最多 4 位小数的有效单价。";
       }
 
-      items.push({ productId, quantity, unitPrice });
+      items.push({ ...(itemId ? { itemId } : {}), productId, quantity, unitPrice });
     });
   }
 

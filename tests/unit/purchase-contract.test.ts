@@ -101,6 +101,26 @@ describe("Purchase Contract validation", () => {
     }
   });
 
+  it("preserves a valid Draft itemId as untrusted row identity input", () => {
+    const result = validatePurchaseContractForm(
+      contractForm({
+        itemsJson: JSON.stringify([
+          {
+            itemId: " item-1 ",
+            productId: "product-1",
+            quantity: "6400",
+            unitPrice: "0.900",
+          },
+        ]),
+      }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      input: { items: [{ itemId: "item-1", productId: "product-1" }] },
+    });
+  });
+
   it("requires number, date, company, supplier, and at least one item", () => {
     const result = validatePurchaseContractForm(
       contractForm({

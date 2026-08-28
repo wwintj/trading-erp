@@ -33,6 +33,7 @@ export type ContractProductOption = {
 };
 
 export type ContractFormItem = {
+  itemId?: string;
   productId: string;
   quantity: string;
   unitPrice: string;
@@ -99,7 +100,8 @@ export function PurchaseContractForm({
   }
 
   const serializedItems = JSON.stringify(
-    rows.map(({ productId, quantity, unitPrice }) => ({
+    rows.map(({ itemId, productId, quantity, unitPrice }) => ({
+      ...(itemId ? { itemId } : {}),
       productId,
       quantity,
       unitPrice,

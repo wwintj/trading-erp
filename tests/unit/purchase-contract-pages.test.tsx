@@ -228,6 +228,8 @@ describe("Purchase Contract pages", () => {
     expect(adminHtml).toContain("保存采购合同");
     expect(adminHtml).toContain("定稿采购合同");
     expect(adminHtml).toContain("取消采购合同");
+    expect(adminHtml).toContain('name="itemsJson"');
+    expect(adminHtml).toContain("item-1");
 
     mocks.getCurrentSession.mockResolvedValue(userSession);
     const userHtml = renderToStaticMarkup(

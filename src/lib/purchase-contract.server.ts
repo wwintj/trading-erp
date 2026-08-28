@@ -73,9 +73,24 @@ function dateFromText(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+function findPurchaseContractForUpdate(
+  transaction: Prisma.TransactionClient,
+  id: string,
+) {
+  return transaction.purchaseContract.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+}
+
+type ExistingPurchaseContract = NonNullable<
+  Awaited<ReturnType<typeof findPurchaseContractForUpdate>>
+>;
+
 async function prepareContractData(
   transaction: Prisma.TransactionClient,
   input: PurchaseContractInput,
+  existing?: ExistingPurchaseContract,
 ) {
   const productIds = [...new Set(input.items.map((item) => item.productId))];
   const [company, supplier, products] = await Promise.all([
@@ -94,9 +109,22 @@ async function prepareContractData(
   }
 
   const productsById = new Map(products.map((product) => [product.id, product]));
+  const existingItemsById = new Map(
+    existing?.items.map((item) => [item.id, item]) ?? [],
+  );
+  const submittedItemIds = new Set<string>();
   input.items.forEach((item, index) => {
     if (!productsById.has(item.productId)) {
       fieldErrors[`items.${index}.productId`] = "请选择有效的产品。";
+    }
+    if (item.itemId) {
+      if (
+        !existingItemsById.has(item.itemId) ||
+        submittedItemIds.has(item.itemId)
+      ) {
+        fieldErrors[`items.${index}.itemId`] = "合同明细身份无效。";
+      }
+      submittedItemIds.add(item.itemId);
     }
   });
 
@@ -119,19 +147,58 @@ async function prepareContractData(
       });
     }
     const calculated = totals.items[index];
+    const existingItem = item.itemId
+      ? existingItemsById.get(item.itemId)
+      : undefined;
+    const snapshotProduct =
+      existingItem && existingItem.productId === item.productId
+        ? {
+            code: existingItem.productCode,
+            name: existingItem.productName,
+            specification: existingItem.specification,
+            unit: existingItem.unit,
+          }
+        : product;
 
     return {
       productId: product.id,
       sortOrder: index,
-      productCode: product.code,
-      productName: product.name,
-      specification: product.specification,
-      unit: product.unit,
+      productCode: snapshotProduct.code,
+      productName: snapshotProduct.name,
+      specification: snapshotProduct.specification,
+      unit: snapshotProduct.unit,
       quantity: new Prisma.Decimal(calculated.quantity),
       unitPrice: new Prisma.Decimal(calculated.unitPrice),
       amount: new Prisma.Decimal(calculated.amount),
     };
   });
+
+  const preserveBuyerSnapshot = existing?.companyId === input.companyId;
+  const preserveSellerSnapshot = existing?.supplierId === input.supplierId;
+  const buyerSnapshot =
+    preserveBuyerSnapshot && existing
+      ? {
+          legalName: existing.buyerLegalName,
+          unifiedCreditCode: existing.buyerUnifiedCreditCode,
+          contactName: existing.buyerContactName,
+          phone: existing.buyerPhone,
+          address: existing.buyerAddress,
+          bankName: existing.buyerBankName,
+          bankAccount: existing.buyerBankAccount,
+        }
+      : company;
+  const sellerSnapshot =
+    preserveSellerSnapshot && existing
+      ? {
+          legalName: existing.sellerLegalName,
+          unifiedCreditCode: existing.sellerUnifiedCreditCode,
+          contactName: existing.sellerContactName,
+          phone: existing.sellerPhone,
+          address: existing.sellerAddress,
+          bankName: existing.sellerBankName,
+          bankAccount: existing.sellerBankAccount,
+        }
+      : supplier;
 
   return {
     header: {
@@ -140,20 +207,20 @@ async function prepareContractData(
       signingPlace: input.signingPlace,
       companyId: company.id,
       supplierId: supplier.id,
-      buyerLegalName: company.legalName,
-      buyerUnifiedCreditCode: company.unifiedCreditCode,
-      buyerContactName: company.contactName,
-      buyerPhone: company.phone,
-      buyerAddress: company.address,
-      buyerBankName: company.bankName,
-      buyerBankAccount: company.bankAccount,
-      sellerLegalName: supplier.legalName,
-      sellerUnifiedCreditCode: supplier.unifiedCreditCode,
-      sellerContactName: supplier.contactName,
-      sellerPhone: supplier.phone,
-      sellerAddress: supplier.address,
-      sellerBankName: supplier.bankName,
-      sellerBankAccount: supplier.bankAccount,
+      buyerLegalName: buyerSnapshot.legalName,
+      buyerUnifiedCreditCode: buyerSnapshot.unifiedCreditCode,
+      buyerContactName: buyerSnapshot.contactName,
+      buyerPhone: buyerSnapshot.phone,
+      buyerAddress: buyerSnapshot.address,
+      buyerBankName: buyerSnapshot.bankName,
+      buyerBankAccount: buyerSnapshot.bankAccount,
+      sellerLegalName: sellerSnapshot.legalName,
+      sellerUnifiedCreditCode: sellerSnapshot.unifiedCreditCode,
+      sellerContactName: sellerSnapshot.contactName,
+      sellerPhone: sellerSnapshot.phone,
+      sellerAddress: sellerSnapshot.address,
+      sellerBankName: sellerSnapshot.bankName,
+      sellerBankAccount: sellerSnapshot.bankAccount,
       deliveryDate: input.deliveryDate ? dateFromText(input.deliveryDate) : null,
       deliveryAddress: input.deliveryAddress,
       deliveryContactName: input.deliveryContactName,
@@ -195,10 +262,7 @@ export function updatePurchaseContract(
 ) {
   return db.$transaction(
     async (transaction) => {
-      const existing = await transaction.purchaseContract.findUnique({
-        where: { id },
-        select: { status: true },
-      });
+      const existing = await findPurchaseContractForUpdate(transaction, id);
       if (!existing) {
         throw new PurchaseContractNotFoundError();
       }
@@ -206,7 +270,7 @@ export function updatePurchaseContract(
         throw new PurchaseContractImmutableError();
       }
 
-      const data = await prepareContractData(transaction, input);
+      const data = await prepareContractData(transaction, input, existing);
       await transaction.purchaseContractItem.deleteMany({
         where: { purchaseContractId: id },
       });

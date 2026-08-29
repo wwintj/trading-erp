@@ -112,6 +112,29 @@ export function confirmPurchaseContractSupplierRefresh(
   return confirm(PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION);
 }
 
+export function purchaseContractItemDeleteConfirmation(
+  product: ContractProductOption,
+) {
+  return `确定从本合同中删除“${product.code} — ${product.name}”吗？保存合同后生效。`;
+}
+
+export function removePurchaseContractFormRow(
+  rows: PurchaseContractFormRow[],
+  index: number,
+  products: ContractProductOption[],
+  confirm: (message: string) => boolean,
+) {
+  const row = rows[index];
+  if (!row) {
+    return rows;
+  }
+  const product = products.find((option) => option.id === row.productId);
+  if (product && !confirm(purchaseContractItemDeleteConfirmation(product))) {
+    return rows;
+  }
+  return rows.filter((_, rowIndex) => rowIndex !== index);
+}
+
 export function PurchaseContractForm({
   contractId,
   initialValues,
@@ -184,9 +207,9 @@ export function PurchaseContractForm({
 
   function removeRow(index: number) {
     setRows((current) =>
-      current.length === 1
-        ? current
-        : current.filter((_, rowIndex) => rowIndex !== index),
+      removePurchaseContractFormRow(current, index, products, (message) =>
+        window.confirm(message),
+      ),
     );
   }
 
@@ -194,7 +217,15 @@ export function PurchaseContractForm({
   const displayedTotal = calculateExactContractTotal(rows)?.totalAmount ?? "—";
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form
+      action={formAction}
+      className="space-y-8"
+      onSubmit={(event) => {
+        if (rows.length === 0) {
+          event.preventDefault();
+        }
+      }}
+    >
       {contractId ? <input type="hidden" name="contractId" value={contractId} /> : null}
       <input type="hidden" name="itemsJson" value={serializedItems} />
 
@@ -264,7 +295,7 @@ export function PurchaseContractForm({
                 name="intent"
                 value={PURCHASE_CONTRACT_SAVE_INTENTS.refreshSupplierSnapshot}
                 variant="outline"
-                disabled={pending}
+                disabled={pending || rows.length === 0}
                 onClick={(event) => {
                   if (
                     !confirmPurchaseContractSupplierRefresh((message) =>
@@ -286,90 +317,131 @@ export function PurchaseContractForm({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold">合同明细</h2>
           <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={pending}>
-            添加明细
+            添加产品
           </Button>
         </div>
         <FieldError message={state.fieldErrors?.items} />
-        <div className="space-y-4">
-          {rows.map((row, index) => {
-            const product = products.find((option) => option.id === row.productId);
-            const calculated = calculateExactContractItemAmount(
-              row.quantity,
-              row.unitPrice,
-            );
-            return (
-              <div key={row.key} className="rounded-md border p-4">
-                <PurchaseContractItemIdentityError
-                  index={index}
-                  fieldErrors={state.fieldErrors}
-                />
-                <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-start">
-                  <FormField
-                    label={`产品 ${index + 1}`}
-                    error={state.fieldErrors?.[`items.${index}.productId`]}
-                  >
-                    <NativeSelect
-                      value={row.productId}
-                      onChange={(event) =>
-                        updateRow(index, { productId: event.target.value })
-                      }
+        {rows.length === 0 ? (
+          <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center">
+            <p className="font-medium text-neutral-900">暂无合同明细</p>
+            <p className="mt-1 text-sm text-neutral-600">
+              请点击“添加产品”添加至少一条合同明细。
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rows.map((row, index) => {
+              const product = products.find((option) => option.id === row.productId);
+              const calculated = calculateExactContractItemAmount(
+                row.quantity,
+                row.unitPrice,
+              );
+              return (
+                <div key={row.key} className="rounded-md border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium text-neutral-500">
+                        明细 {index + 1}
+                      </p>
+                      {product ? (
+                        <>
+                          <p className="text-base font-semibold text-neutral-950">
+                            {product.code} — {product.name}
+                          </p>
+                          <p className="text-sm text-neutral-600">
+                            规格/型号：{product.specification ?? "未填写"} · 单位：
+                            {product.unit}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm font-medium text-neutral-700">
+                          尚未选择产品
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-red-200 text-red-700 hover:bg-red-50 focus-visible:ring-red-600"
+                      onClick={() => removeRow(index)}
                       disabled={pending}
                     >
-                      <option value="">请选择产品</option>
-                      {products.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.code} — {option.name}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </FormField>
-                  <FormField
-                    label="数量"
-                    error={state.fieldErrors?.[`items.${index}.quantity`]}
-                  >
-                    <Input
-                      inputMode="decimal"
-                      value={row.quantity}
-                      onChange={(event) => updateRow(index, { quantity: event.target.value })}
-                      disabled={pending}
-                    />
-                  </FormField>
-                  <FormField
-                    label="单价（元）"
-                    error={state.fieldErrors?.[`items.${index}.unitPrice`]}
-                  >
-                    <Input
-                      inputMode="decimal"
-                      value={row.unitPrice}
-                      onChange={(event) => updateRow(index, { unitPrice: event.target.value })}
-                      disabled={pending}
-                    />
-                  </FormField>
-                  <div className="space-y-2">
-                    <Label>金额（元）</Label>
-                    <p className="h-9 rounded-md border bg-neutral-50 px-3 py-2 text-sm">
-                      {calculated?.amount ?? "—"}
-                    </p>
+                      删除明细
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeRow(index)}
-                    disabled={pending || rows.length === 1}
-                  >
-                    删除行
-                  </Button>
+                  <PurchaseContractItemIdentityError
+                    index={index}
+                    fieldErrors={state.fieldErrors}
+                  />
+                  <div className="mt-4 space-y-4">
+                    <FormField
+                      label="产品（可更换）"
+                      error={state.fieldErrors?.[`items.${index}.productId`]}
+                    >
+                      <NativeSelect
+                        value={row.productId}
+                        onChange={(event) =>
+                          updateRow(index, { productId: event.target.value })
+                        }
+                        disabled={pending}
+                      >
+                        <option value="">请选择产品</option>
+                        {products.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.code} — {option.name}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      <p className="text-sm text-neutral-500">
+                        选择其它产品即可更换本条合同明细。
+                      </p>
+                    </FormField>
+                    <div className="grid gap-4 sm:grid-cols-3 sm:items-start">
+                      <FormField
+                        label="数量"
+                        error={state.fieldErrors?.[`items.${index}.quantity`]}
+                      >
+                        <Input
+                          inputMode="decimal"
+                          value={row.quantity}
+                          onChange={(event) =>
+                            updateRow(index, { quantity: event.target.value })
+                          }
+                          disabled={pending}
+                        />
+                      </FormField>
+                      <FormField
+                        label="单价（元）"
+                        error={state.fieldErrors?.[`items.${index}.unitPrice`]}
+                      >
+                        <Input
+                          inputMode="decimal"
+                          value={row.unitPrice}
+                          onChange={(event) =>
+                            updateRow(index, { unitPrice: event.target.value })
+                          }
+                          disabled={pending}
+                        />
+                      </FormField>
+                      <div className="space-y-2">
+                        <Label>金额（元）</Label>
+                        <p className="h-9 rounded-md border bg-neutral-50 px-3 py-2 text-sm">
+                          {calculated?.amount ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {product ? (
-                  <p className="mt-3 text-xs text-neutral-500">
-                    {product.code} · {product.name} · {product.specification ?? "无规格/型号"} · {product.unit}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
+        {rows.length === 0 ? (
+          <p className="text-sm text-red-700" role="alert">
+            请至少添加一条合同明细后再保存。
+          </p>
+        ) : null}
         <p className="text-right text-sm font-semibold">
           合同总金额（元）：{displayedTotal}
         </p>
@@ -441,7 +513,7 @@ export function PurchaseContractForm({
           type="submit"
           name="intent"
           value={PURCHASE_CONTRACT_SAVE_INTENTS.save}
-          disabled={pending}
+          disabled={pending || rows.length === 0}
         >
           {pending
             ? contractId

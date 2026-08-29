@@ -48,6 +48,8 @@ import {
   PurchaseContractItemIdentityError,
   confirmPurchaseContractSupplierRefresh,
   getPurchaseContractSaveNavigation,
+  purchaseContractItemDeleteConfirmation,
+  removePurchaseContractFormRow,
   synchronizePurchaseContractFormRows,
 } from "@/components/purchase-contract/purchase-contract-form";
 import {
@@ -71,7 +73,7 @@ const options = {
       id: "product-1",
       code: "WS-H42",
       name: "PVC热收缩套管",
-      specification: null,
+      specification: "WS-H42",
       unit: "米",
     },
   ],
@@ -125,7 +127,7 @@ function contract(status: "DRAFT" | "FINAL" | "CANCELLED" = "DRAFT") {
         sortOrder: 0,
         productCode: "WS-H42",
         productName: "PVC热收缩套管",
-        specification: null,
+        specification: "WS-H42",
         unit: "米",
         quantity: new Prisma.Decimal("6400.000"),
         unitPrice: new Prisma.Decimal("0.9000"),
@@ -223,8 +225,15 @@ describe("Purchase Contract pages", () => {
     for (const section of ["基本信息", "买卖双方", "合同明细", "交货与验收", "付款与运输", "合同条款"]) {
       expect(html).toContain(section);
     }
-    expect(html).toContain("添加明细");
-    expect(html).toContain("删除行");
+    expect(html).toContain("添加产品");
+    expect(html).toContain("删除明细");
+    expect(html).toContain("明细 1");
+    expect(html).toContain("WS-H42 — PVC热收缩套管");
+    expect(html).toContain("规格/型号：WS-H42 · 单位：米");
+    expect(html).toContain("text-base font-semibold text-neutral-950");
+    expect(html).toContain("产品（可更换）");
+    expect(html).toContain("选择其它产品即可更换本条合同明细。");
+    expect(html).toContain("border-red-200 text-red-700");
     expect(html).toContain("合同总金额（元）");
     expect(html).toContain("合同变更");
     expect(html).toContain("特别注意");
@@ -329,6 +338,94 @@ describe("Purchase Contract pages", () => {
     );
 
     expect(html).toContain("合同明细身份无效。");
+  });
+
+  it("confirms selected-product deletion and allows deleting the last row", () => {
+    const rows = [
+      {
+        key: 10,
+        itemId: "item-1",
+        productId: "product-1",
+        quantity: "6400",
+        unitPrice: "0.900",
+      },
+    ];
+    const cancel = vi.fn(() => false);
+
+    expect(removePurchaseContractFormRow(rows, 0, options.products, cancel)).toBe(
+      rows,
+    );
+    expect(cancel).toHaveBeenCalledWith(
+      "确定从本合同中删除“WS-H42 — PVC热收缩套管”吗？保存合同后生效。",
+    );
+    expect(purchaseContractItemDeleteConfirmation(options.products[0])).toBe(
+      "确定从本合同中删除“WS-H42 — PVC热收缩套管”吗？保存合同后生效。",
+    );
+
+    const confirm = vi.fn(() => true);
+    expect(removePurchaseContractFormRow(rows, 0, options.products, confirm)).toEqual(
+      [],
+    );
+  });
+
+  it("deletes one of multiple rows without changing the remaining row data", () => {
+    const rows = [
+      {
+        key: 10,
+        itemId: "item-1",
+        productId: "product-1",
+        quantity: "6400",
+        unitPrice: "0.900",
+      },
+      {
+        key: 11,
+        itemId: "item-2",
+        productId: "product-1",
+        quantity: "12",
+        unitPrice: "8.5",
+      },
+    ];
+
+    expect(
+      removePurchaseContractFormRow(rows, 0, options.products, () => true),
+    ).toEqual([rows[1]]);
+  });
+
+  it("deletes an unselected row without confirmation", () => {
+    const confirm = vi.fn(() => false);
+    const rows = [
+      { key: 10, productId: "", quantity: "", unitPrice: "" },
+    ];
+
+    expect(removePurchaseContractFormRow(rows, 0, options.products, confirm)).toEqual(
+      [],
+    );
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("renders the zero-item empty state and disables save and Supplier refresh", async () => {
+    mocks.getCurrentSession.mockResolvedValue(adminSession);
+    mocks.getPurchaseContractById.mockResolvedValue({
+      ...contract("DRAFT"),
+      items: [],
+    });
+
+    const html = renderToStaticMarkup(
+      await PurchaseContractPage({ params: Promise.resolve({ id: "contract-1" }) }),
+    );
+    const refreshButton = html.match(
+      /<button[^>]*value="refreshSupplierSnapshot"[^>]*>更新供应商资料<\/button>/,
+    )?.[0];
+    const saveButton = html.match(
+      /<button[^>]*value="save"[^>]*>保存采购合同<\/button>/,
+    )?.[0];
+
+    expect(html).toContain("暂无合同明细");
+    expect(html).toContain("请点击“添加产品”添加至少一条合同明细。");
+    expect(html).toContain("请至少添加一条合同明细后再保存。");
+    expect(html).toContain("合同总金额（元）：0.00");
+    expect(refreshButton).toContain("disabled");
+    expect(saveButton).toContain("disabled");
   });
 
   it("renders Draft editable for admin and read-only for user", async () => {

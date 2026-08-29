@@ -18,16 +18,16 @@ export const PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH = path.join(
   process.cwd(),
   "assets",
   "fonts",
-  "FandolFang-Regular.otf",
+  "NotoSerifCJKsc-Regular.otf",
 );
 export const PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH = path.join(
   process.cwd(),
   "assets",
   "fonts",
-  "NotoSansCJKsc-Bold.otf",
+  "NotoSerifCJKsc-Bold.otf",
 );
-export const PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT =
-  "特别注意此次订单发货地址如下收件人浙江省乐清市翁垟街道高桥村龙栖路142号";
+export const PURCHASE_CONTRACT_PDF_REQUIRED_TEXT =
+  "采购合同合同编号签约时间签约地点买方卖方型号品名商标规格产地数量单价金额备注交货时间发货地址收货人电话验收方法质量条款货款结算运输方式合同变更争议解决违约责任附加条款浙江省乐清市翁垟街道高桥村龙栖路";
 
 export const PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN = "right" as const;
 export const PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN = "left" as const;
@@ -51,15 +51,15 @@ export type PurchaseContractPdfFontSource =
   | FontSource
   | { source: FontSource; family?: string };
 type AssertReadable = (fontPath: string) => Promise<void>;
-type AssertBoldGlyphCoverage = (fontPath: string) => Promise<void> | void;
+type AssertGlyphCoverage = (fontPath: string) => Promise<void> | void;
 
-function assertBundledBoldGlyphCoverage(fontPath: string) {
+function assertFontGlyphCoverage(fontPath: string) {
   const opened = fontkit.openSync(fontPath);
   if (!("hasGlyphForCodePoint" in opened)) {
     throw new Error("Expected a single OpenType font");
   }
 
-  for (const character of new Set(PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT)) {
+  for (const character of new Set(PURCHASE_CONTRACT_PDF_REQUIRED_TEXT)) {
     const codePoint = character.codePointAt(0);
     if (codePoint === undefined || !opened.hasGlyphForCodePoint(codePoint)) {
       throw new Error("Required PDF emphasis glyph is unavailable");
@@ -76,8 +76,7 @@ export async function resolvePurchaseContractPdfFontPath(
     }
     await access(fontPath, constants.R_OK);
   },
-  assertBoldGlyphCoverage: AssertBoldGlyphCoverage =
-    assertBundledBoldGlyphCoverage,
+  assertGlyphCoverage: AssertGlyphCoverage = assertFontGlyphCoverage,
 ): Promise<string> {
   const configured = source.PURCHASE_CONTRACT_PDF_FONT_PATH?.trim();
   const fontPath = configured || PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH;
@@ -85,7 +84,8 @@ export async function resolvePurchaseContractPdfFontPath(
   try {
     await assertReadable(fontPath);
     await assertReadable(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
-    await assertBoldGlyphCoverage(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
+    await assertGlyphCoverage(fontPath);
+    await assertGlyphCoverage(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
     return fontPath;
   } catch {
     throw new PurchaseContractPdfFontError();
@@ -452,44 +452,6 @@ function renderRemarks(
     document.y += 2;
   }
 
-  if (model.specialDelivery) {
-    const lines = ["特别注意："];
-    if (model.specialDelivery.address) {
-      lines.push(`此次订单发货地址如下：${model.specialDelivery.address}`);
-    }
-    if (model.specialDelivery.recipient || model.specialDelivery.phone) {
-      const recipient = model.specialDelivery.recipient ?? "";
-      const phone = model.specialDelivery.phone
-        ? `${recipient ? "    " : ""}${model.specialDelivery.phone}`
-        : "";
-      lines.push(`收件人：${recipient}${phone}`);
-    }
-    document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
-    const specialDeliveryText = lines.join("\n");
-    const specialDeliveryHeight = document.heightOfString(
-      specialDeliveryText,
-      {
-        width: contentWidth(document),
-        lineGap: BODY_LINE_GAP,
-      },
-    );
-    const pageBreak = ensureSpace(
-      document,
-      specialDeliveryHeight + 2,
-      fontSource,
-    );
-    if (pageBreak) {
-      document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
-    }
-    document
-      .fontSize(BODY_FONT_SIZE)
-      .text(specialDeliveryText, CONTENT_MARGIN, document.y, {
-        width: contentWidth(document),
-        lineGap: BODY_LINE_GAP,
-      });
-    document.y += 2;
-    applyFont(document, fontSource);
-  }
 }
 
 function renderTotal(
@@ -531,14 +493,54 @@ function renderTerms(
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
 ) {
+  const subLineIndent = 22;
   for (const term of model.terms) {
-    ensureSpace(document, 22, fontSource);
-    document
-      .fontSize(BODY_FONT_SIZE)
-      .text(`${term.heading}${term.value}`, CONTENT_MARGIN, document.y, {
-        width: contentWidth(document),
+    const applyTermFont = () =>
+      term.emphasized
+        ? document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME)
+        : applyFont(document, fontSource);
+    applyTermFont().fontSize(BODY_FONT_SIZE);
+    const mainText = `${term.heading}${term.value}`;
+    const mainHeight = document.heightOfString(mainText, {
+      width: contentWidth(document),
+      lineGap: BODY_LINE_GAP,
+    });
+    const pageBreak = ensureSpace(document, mainHeight, fontSource);
+    if (pageBreak) {
+      applyTermFont().fontSize(BODY_FONT_SIZE);
+    }
+    document.text(mainText, CONTENT_MARGIN, document.y, {
+      width: contentWidth(document),
+      lineGap: BODY_LINE_GAP,
+    });
+
+    for (const subLine of term.subLines) {
+      applyTermFont().fontSize(BODY_FONT_SIZE);
+      const subLineHeight = document.heightOfString(subLine, {
+        width: contentWidth(document) - subLineIndent,
         lineGap: BODY_LINE_GAP,
       });
+      const subLinePageBreak = ensureSpace(
+        document,
+        subLineHeight,
+        fontSource,
+      );
+      if (subLinePageBreak) {
+        applyTermFont().fontSize(BODY_FONT_SIZE);
+      }
+      document.text(
+        subLine,
+        CONTENT_MARGIN + subLineIndent,
+        document.y,
+        {
+          width: contentWidth(document) - subLineIndent,
+          lineGap: BODY_LINE_GAP,
+        },
+      );
+    }
+    if (term.emphasized) {
+      applyFont(document, fontSource);
+    }
     document.y += 1;
   }
 }

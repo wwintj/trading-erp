@@ -16,7 +16,7 @@ On a new Ubuntu VPS, install or verify the operating-system dependencies before 
 ./scripts/install-system-deps.sh
 ```
 
-The script remains the stable deployment entry point for operating-system dependencies. The application currently has no required OS-level packages, so it performs a safe dependency check and exits successfully. Purchase Contract PDF export uses the bundled open-source FandolFang font and no longer requires an apt-installed Chinese font.
+The script remains the stable deployment entry point for operating-system dependencies. The application currently has no required OS-level packages, so it performs a safe dependency check and exits successfully. Purchase Contract PDF export uses a bundled open-source Noto Serif CJK SC font family and does not require an apt-installed Chinese font.
 
 ## Local setup
 
@@ -81,7 +81,7 @@ Authenticated users can list and view products at `/products`. Administrators ca
 
 Authenticated users can list and view purchase contracts at `/purchase-contracts`. Administrators can create and edit Draft contracts, finalize or reopen them, or cancel Draft/Final contracts; regular users have read-only access. Both roles can export a formal PDF while a contract is Final; Draft and Cancelled contracts cannot be exported.
 
-Purchase Contract PDF export uses the bundled `assets/fonts/FandolFang-Regular.otf` body font and `assets/fonts/NotoSansCJKsc-Bold.otf` emphasis font, so a new VPS does not need a system Chinese-font package. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to use a different readable body font file; an invalid override fails safely without falling back. The body font comes from the official Fandol package on CTAN and is distributed under GPLv3 with the GPL font exception; its unmodified upstream license is stored at `assets/fonts/COPYING-Fandol`. The emphasis font is the official Noto Sans CJK SC Bold face from the [Noto CJK project](https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/SimplifiedChinese) and is distributed under the SIL Open Font License 1.1, stored unmodified at `assets/fonts/LICENSE-Noto-CJK`.
+Purchase Contract PDF export uses the matched bundled `assets/fonts/NotoSerifCJKsc-Regular.otf` and `assets/fonts/NotoSerifCJKsc-Bold.otf` faces, so a new VPS does not need a system Chinese-font package. Both are official Noto Serif CJK SC releases from the [Noto CJK project](https://github.com/notofonts/noto-cjk/tree/main/Serif/OTF/SimplifiedChinese), distributed under the SIL Open Font License 1.1 stored unmodified at `assets/fonts/LICENSE-Noto-CJK`. Set the optional `PURCHASE_CONTRACT_PDF_FONT_PATH` environment variable to use a different readable regular body font file; this is an advanced override, while Bold emphasis continues to use the bundled Noto Serif CJK SC Bold face and therefore may no longer be a matched family. An invalid or required-glyph-incomplete override fails safely without falling back.
 
 ## Production migration
 
@@ -116,7 +116,7 @@ Playwright uses a local Next.js development server. Install its Chromium runtime
 pnpm exec playwright install chromium
 ```
 
-Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, PDF export with MySQL snapshots and bundled FandolFang rendering, and readiness integration must be verified after deployment.
+Without a local MySQL server, Playwright retains non-database smoke coverage for the login page and fail-closed dashboard/account/company/supplier/product/purchase-contract redirects. Real sign-in, session persistence, sign-out, password change, Company CRUD, Supplier CRUD, Product CRUD, Purchase Contract transactions/status transitions, PDF export with MySQL snapshots and bundled Noto Serif CJK SC rendering, and readiness integration must be verified after deployment.
 
 ## Database development
 

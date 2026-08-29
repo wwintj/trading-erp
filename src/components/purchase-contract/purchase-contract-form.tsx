@@ -297,7 +297,7 @@ export function PurchaseContractForm({
         {([
           ["breachTerms", "违约/迟延条款"],
           ["qualityTerms", "质量条款"],
-          ["changeTerms", "变更条款"],
+          ["changeTerms", "合同变更"],
           ["disputeTerms", "争议解决"],
           ["additionalTerms", "补充条款"],
         ] as const).map(([name, label]) => (

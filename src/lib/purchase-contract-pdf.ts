@@ -102,11 +102,6 @@ export type PurchaseContractPdfViewModel = {
     amountDisplay: string;
   }>;
   remarks: PurchaseContractPdfRemarkLine[];
-  specialDelivery: {
-    address: string | null;
-    recipient: string | null;
-    phone: string | null;
-  } | null;
   totalAmount: string;
   totalAmountDisplay: string;
   totalAmountUppercase: string;
@@ -115,6 +110,8 @@ export type PurchaseContractPdfViewModel = {
     heading: string;
     label: string;
     value: string;
+    subLines: string[];
+    emphasized: boolean;
   }>;
 };
 
@@ -372,26 +369,69 @@ export function buildPurchaseContractPdfViewModel(
     throw new PurchaseContractPdfIntegrityError();
   }
 
-  const storedTerms: Array<[string, string | null]> = [
-    ["验收方法", optionalText(source.inspectionTerms)],
-    ["质量/异议条款", optionalText(source.qualityTerms)],
-    ["交货时间", source.deliveryDate ? chineseDate(source.deliveryDate) : null],
-    ["货款结算", optionalText(source.paymentTerms)],
-    ["运输方式及费用承担", optionalText(source.shippingMethod)],
-    ["合同变更", optionalText(source.changeTerms)],
-    ["争议解决", optionalText(source.disputeTerms)],
-    ["违约责任", optionalText(source.breachTerms)],
-    ["附加条款", optionalText(source.additionalTerms)],
+  const deliveryDate = source.deliveryDate
+    ? chineseDate(source.deliveryDate)
+    : null;
+  const deliveryAddress = optionalText(source.deliveryAddress);
+  const deliveryContactName = optionalText(source.deliveryContactName);
+  const deliveryContactPhone = optionalText(source.deliveryContactPhone);
+  const deliverySubLines: string[] = [];
+  if (deliveryAddress) {
+    deliverySubLines.push(`发货地址：${deliveryAddress}`);
+  }
+  if (deliveryContactName || deliveryContactPhone) {
+    deliverySubLines.push(
+      [
+        deliveryContactName ? `收货人：${deliveryContactName}` : null,
+        deliveryContactPhone ? `电话：${deliveryContactPhone}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join("    "),
+    );
+  }
+
+  type StoredTerm = {
+    label: string;
+    value: string;
+    subLines?: string[];
+    emphasized?: boolean;
+  };
+  const optionalTerm = (
+    label: string,
+    value: string | null,
+    emphasized = false,
+  ): StoredTerm | null =>
+    value ? { label, value, emphasized } : null;
+  const deliveryTerm: StoredTerm | null =
+    deliveryDate || deliverySubLines.length > 0
+      ? {
+          label: deliveryDate ? "交货时间" : "交货信息",
+          value: deliveryDate ?? "",
+          subLines: deliverySubLines,
+        }
+      : null;
+  const storedTerms: Array<StoredTerm | null> = [
+    optionalTerm("验收方法", optionalText(source.inspectionTerms)),
+    optionalTerm("质量/异议条款", optionalText(source.qualityTerms)),
+    deliveryTerm,
+    optionalTerm("货款结算", optionalText(source.paymentTerms)),
+    optionalTerm("运输方式及费用承担", optionalText(source.shippingMethod)),
+    optionalTerm("合同变更", optionalText(source.changeTerms), true),
+    optionalTerm("争议解决", optionalText(source.disputeTerms)),
+    optionalTerm("违约责任", optionalText(source.breachTerms)),
+    optionalTerm("附加条款", optionalText(source.additionalTerms)),
   ];
   const terms = storedTerms
-    .filter((term): term is [string, string] => term[1] !== null)
-    .map(([label, value], index) => {
+    .filter((term): term is StoredTerm => term !== null)
+    .map((term, index) => {
       const sectionNumber = index + 2;
       return {
         sectionNumber,
-        heading: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、${label}：`,
-        label,
-        value,
+        heading: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、${term.label}：`,
+        label: term.label,
+        value: term.value,
+        subLines: term.subLines ?? [],
+        emphasized: term.emphasized ?? false,
       };
     });
 
@@ -407,9 +447,6 @@ export function buildPurchaseContractPdfViewModel(
     phone: source.sellerPhone,
     address: source.sellerAddress,
   });
-  const deliveryAddress = optionalText(source.deliveryAddress);
-  const deliveryContactName = optionalText(source.deliveryContactName);
-  const deliveryContactPhone = optionalText(source.deliveryContactPhone);
   const totalAmount = source.totalAmount.toFixed(2);
 
   return {
@@ -424,14 +461,6 @@ export function buildPurchaseContractPdfViewModel(
     itemTableLabels: PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS,
     items,
     remarks: purchaseContractPdfRemarkLines(source.packagingTerms),
-    specialDelivery:
-      deliveryAddress || deliveryContactName || deliveryContactPhone
-        ? {
-            address: deliveryAddress,
-            recipient: deliveryContactName,
-            phone: deliveryContactPhone,
-          }
-        : null,
     totalAmount,
     totalAmountDisplay: `¥${formatExactAmountWithThousands(totalAmount)}`,
     totalAmountUppercase: formatRmbUppercase(totalAmount),
@@ -481,7 +510,15 @@ export function purchaseContractPdfContentDisposition(
 ): string {
   const asciiFilename = `purchase-contract-${sanitizeAsciiContractNo(contractNo)}.pdf`;
   const displayBuyerLegalName = sanitizeDisplayBuyerLegalName(buyerLegalName);
-  const displayFilename = `${displayBuyerLegalName}采购合同${sanitizeDisplayContractNo(contractNo)}.pdf`;
+  const displayContractNo = sanitizeDisplayContractNo(contractNo);
+  const displayFilename = [
+    "采购合同",
+    displayContractNo,
+    displayBuyerLegalName || null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join("-")
+    .concat(".pdf");
   return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeRfc5987(displayFilename)}`;
 }
 

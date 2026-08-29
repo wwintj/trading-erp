@@ -24,7 +24,6 @@ import {
 import {
   PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
   PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
-  PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT,
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
   PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP,
@@ -34,6 +33,7 @@ import {
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
   PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
+  PURCHASE_CONTRACT_PDF_REQUIRED_TEXT,
   PurchaseContractPdfFontError,
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
@@ -45,10 +45,8 @@ import {
   resolvePurchaseContractPdfFontPath,
 } from "@/lib/purchase-contract-pdf.server";
 
-const SIMPLIFIED_CHINESE_CORE_SAMPLE =
-  "采购合同合同编号签约时间签约地点买方卖方型号品名商标规格产地数量单价金额备注特别注意交货地址收件人验收方法包装要求货款结算运输方式合同变更解除争议违约责任附加条款";
-const SIMPLIFIED_CHINESE_BOLD_SAMPLE =
-  "特别注意此次订单发货地址如下收件人浙江省乐清市翁垟街道高桥村龙栖路142号";
+const REQUIRED_GLYPH_SAMPLE =
+  "采购合同合同编号签约时间签约地点买方卖方型号品名商标规格产地数量单价金额备注交货时间发货地址收货人电话验收方法质量条款货款结算运输方式合同变更争议解决违约责任附加条款浙江省乐清市翁垟街道高桥村龙栖路";
 
 function contractFixture(): PurchaseContractPdfSource {
   return {
@@ -138,11 +136,6 @@ describe("Purchase Contract PDF historical view model", () => {
         { marker: "2)", content: "第二项" },
         { marker: "3)", content: "第三项" },
       ],
-      specialDelivery: {
-        address: "浙江省乐清市历史收货地址",
-        recipient: "张建英",
-        phone: "13800000000",
-      },
       totalAmount: "5760.00",
       totalAmountDisplay: "¥5,760.00",
       totalAmountUppercase: "伍仟柒佰陆拾元整",
@@ -174,6 +167,18 @@ describe("Purchase Contract PDF historical view model", () => {
       phone: "0752-1234567",
       contactName: "卖方联系人",
     });
+    expect(model).not.toHaveProperty("specialDelivery");
+    expect(model.terms.find((term) => term.label === "交货时间")).toEqual({
+      sectionNumber: 4,
+      heading: "四、交货时间：",
+      label: "交货时间",
+      value: "2026年09月01日",
+      subLines: [
+        "发货地址：浙江省乐清市历史收货地址",
+        "收货人：张建英    电话：13800000000",
+      ],
+      emphasized: false,
+    });
     expect(JSON.stringify(model)).not.toContain("当前 Company 名称");
     expect(JSON.stringify(model)).not.toContain("当前 Supplier 名称");
     expect(JSON.stringify(model)).not.toContain("当前 Product 名称");
@@ -196,6 +201,112 @@ describe("Purchase Contract PDF historical view model", () => {
       "九、违约责任：",
     ]);
     expect(model.terms.some((term) => term.label === "附加条款")).toBe(false);
+    expect(model.terms.find((term) => term.label === "合同变更")).toMatchObject({
+      value: "合同变更须书面确认",
+      emphasized: true,
+      subLines: [],
+    });
+  });
+
+  it.each([
+    {
+      label: "date only",
+      date: new Date("2026-09-01T00:00:00.000Z"),
+      address: null,
+      recipient: null,
+      phone: null,
+      expected: {
+        label: "交货时间",
+        value: "2026年09月01日",
+        subLines: [],
+      },
+    },
+    {
+      label: "address only",
+      date: null,
+      address: "浙江省乐清市翁垟街道高桥村龙栖路142号",
+      recipient: null,
+      phone: null,
+      expected: {
+        label: "交货信息",
+        value: "",
+        subLines: ["发货地址：浙江省乐清市翁垟街道高桥村龙栖路142号"],
+      },
+    },
+    {
+      label: "recipient only",
+      date: null,
+      address: null,
+      recipient: "张建英",
+      phone: null,
+      expected: {
+        label: "交货信息",
+        value: "",
+        subLines: ["收货人：张建英"],
+      },
+    },
+    {
+      label: "phone only",
+      date: null,
+      address: null,
+      recipient: null,
+      phone: "13587623210",
+      expected: {
+        label: "交货信息",
+        value: "",
+        subLines: ["电话：13587623210"],
+      },
+    },
+  ])("builds a delivery term for $label", ({ date, address, recipient, phone, expected }) => {
+    const source = contractFixture();
+    source.deliveryDate = date;
+    source.deliveryAddress = address;
+    source.deliveryContactName = recipient;
+    source.deliveryContactPhone = phone;
+
+    const deliveryTerm = buildPurchaseContractPdfViewModel(source).terms.find(
+      (term) => term.label === "交货时间" || term.label === "交货信息",
+    );
+
+    expect(deliveryTerm).toMatchObject(expected);
+  });
+
+  it("omits delivery and contract-change terms when their stored fields are empty", () => {
+    const source = contractFixture();
+    source.deliveryDate = null;
+    source.deliveryAddress = "  ";
+    source.deliveryContactName = null;
+    source.deliveryContactPhone = "";
+    source.changeTerms = "  \n  ";
+
+    const model = buildPurchaseContractPdfViewModel(source);
+
+    expect(
+      model.terms.some(
+        (term) => term.label === "交货时间" || term.label === "交货信息",
+      ),
+    ).toBe(false);
+    expect(model.terms.some((term) => term.label === "合同变更")).toBe(false);
+    expect(model.terms.map((term) => term.sectionNumber)).toEqual([
+      2, 3, 4, 5, 6, 7,
+    ]);
+  });
+
+  it("preserves populated multi-line contract change text as bold emphasis", () => {
+    const source = contractFixture();
+    source.changeTerms =
+      "本合同数量允许根据实际生产情况上下浮动5%。\n所有变更须双方书面确认。";
+
+    const term = buildPurchaseContractPdfViewModel(source).terms.find(
+      (candidate) => candidate.label === "合同变更",
+    );
+
+    expect(term).toMatchObject({
+      value:
+        "本合同数量允许根据实际生产情况上下浮动5%。\n所有变更须双方书面确认。",
+      emphasized: true,
+      subLines: [],
+    });
   });
 
   it("contains the historical labels and no generic report sections", () => {
@@ -212,6 +323,8 @@ describe("Purchase Contract PDF historical view model", () => {
     }
     expect(PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS[0]).toBe("型号");
     expect(modelText).not.toContain("货号");
+    expect(modelText).not.toContain("特别注意");
+    expect(rendererText).not.toContain("特别注意");
     for (const forbidden of [
       "买卖双方",
       "合同明细",
@@ -469,10 +582,10 @@ describe("Purchase Contract PDF RMB uppercase formatting", () => {
 describe("Purchase Contract PDF bundled fonts", () => {
   it("includes readable regular and bold OpenType font files", () => {
     expect(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH).toBe(
-      resolve("assets/fonts/FandolFang-Regular.otf"),
+      resolve("assets/fonts/NotoSerifCJKsc-Regular.otf"),
     );
     expect(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH).toBe(
-      resolve("assets/fonts/NotoSansCJKsc-Bold.otf"),
+      resolve("assets/fonts/NotoSerifCJKsc-Bold.otf"),
     );
     expect(statSync(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH).isFile()).toBe(true);
     expect(statSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH).isFile()).toBe(true);
@@ -484,39 +597,33 @@ describe("Purchase Contract PDF bundled fonts", () => {
     ).not.toThrow();
     expect(
       createHash("sha256")
+        .update(readFileSync(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH))
+        .digest("hex"),
+    ).toBe("2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca");
+    expect(
+      createHash("sha256")
         .update(readFileSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH))
         .digest("hex"),
-    ).toBe("b5f0d1a190a7f9b43c310a8850630af12553df32c4c050543f9059732d9b4c0a");
+    ).toBe("8af07d4b6c2e82bcc72a30e066eaf295f11b9424f4aad2eaa9fe0e9c3b38fc73");
   });
 
-  it("covers every required Simplified Chinese core glyph", () => {
-    const opened = fontkit.openSync(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH);
+  it.each([
+    [PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH, "NotoSerifCJKsc-Regular"],
+    [PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH, "NotoSerifCJKsc-Bold"],
+  ])("covers every required glyph in %s", (fontPath, postscriptName) => {
+    const opened = fontkit.openSync(fontPath);
     if (!("hasGlyphForCodePoint" in opened)) {
       throw new Error("Expected a single OpenType font");
     }
-    const missing = [...new Set(SIMPLIFIED_CHINESE_CORE_SAMPLE)].filter(
+    const missing = [...new Set(REQUIRED_GLYPH_SAMPLE)].filter(
       (character) =>
         !opened.hasGlyphForCodePoint(character.codePointAt(0) as number),
     );
 
-    expect(opened.postscriptName).toBe("FandolFang-Regular");
-    expect(missing).toEqual([]);
-  });
-
-  it("uses the official bold face with complete special-delivery glyphs", () => {
-    const opened = fontkit.openSync(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
-    if (!("hasGlyphForCodePoint" in opened)) {
-      throw new Error("Expected a single OpenType font");
-    }
-    const missing = [...new Set(SIMPLIFIED_CHINESE_BOLD_SAMPLE)].filter(
-      (character) =>
-        !opened.hasGlyphForCodePoint(character.codePointAt(0) as number),
-    );
-
-    expect(PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT).toBe(
-      SIMPLIFIED_CHINESE_BOLD_SAMPLE,
-    );
-    expect(opened.postscriptName).toBe("NotoSansCJKsc-Bold");
+    expect(PURCHASE_CONTRACT_PDF_REQUIRED_TEXT).toBe(REQUIRED_GLYPH_SAMPLE);
+    expect(opened.postscriptName).toBe(postscriptName);
+    expect(opened.hasGlyphForCodePoint("翁".codePointAt(0) as number)).toBe(true);
+    expect(opened.hasGlyphForCodePoint("垟".codePointAt(0) as number)).toBe(true);
     expect(missing).toEqual([]);
   });
 
@@ -528,7 +635,7 @@ describe("Purchase Contract PDF bundled fonts", () => {
     );
 
     expect(readme).toContain(
-      "https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/SimplifiedChinese",
+      "https://github.com/notofonts/noto-cjk/tree/main/Serif/OTF/SimplifiedChinese",
     );
     expect(readme).toContain("SIL Open Font License 1.1");
     expect(license).toContain("SIL OPEN FONT LICENSE Version 1.1");
@@ -547,7 +654,7 @@ describe("Purchase Contract PDF bundled fonts", () => {
     expect(pdfPageCount(pdf)).toBe(1);
   });
 
-  it("uses the bold face for special delivery and restores the body font", async () => {
+  it("uses Bold for contract change and restores Regular for following terms", async () => {
     const fontSpy = vi.spyOn(PDFDocument.prototype, "font");
     try {
       await renderPurchaseContractPdf(
@@ -591,37 +698,42 @@ describe("Purchase Contract PDF bundled fonts", () => {
 });
 
 describe("Purchase Contract PDF font resolution", () => {
-  it("uses the bundled FandolFang path by default", async () => {
+  it("uses and validates the bundled matched Noto Serif pair by default", async () => {
     const assertReadable = vi.fn().mockResolvedValue(undefined);
-    const assertBoldGlyphCoverage = vi.fn();
+    const assertGlyphCoverage = vi.fn();
 
     await expect(
       resolvePurchaseContractPdfFontPath(
         {},
         assertReadable,
-        assertBoldGlyphCoverage,
+        assertGlyphCoverage,
       ),
     ).resolves.toBe(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH);
     expect(assertReadable).toHaveBeenCalledWith(
-      resolve("assets/fonts/FandolFang-Regular.otf"),
+      resolve("assets/fonts/NotoSerifCJKsc-Regular.otf"),
     );
     expect(assertReadable).toHaveBeenCalledWith(
-      resolve("assets/fonts/NotoSansCJKsc-Bold.otf"),
+      resolve("assets/fonts/NotoSerifCJKsc-Bold.otf"),
     );
-    expect(assertBoldGlyphCoverage).toHaveBeenCalledWith(
+    expect(assertGlyphCoverage).toHaveBeenNthCalledWith(
+      1,
+      PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+    );
+    expect(assertGlyphCoverage).toHaveBeenNthCalledWith(
+      2,
       PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
     );
   });
 
   it("honors the optional font path override without a fallback", async () => {
     const assertReadable = vi.fn().mockResolvedValue(undefined);
-    const assertBoldGlyphCoverage = vi.fn();
+    const assertGlyphCoverage = vi.fn();
 
     await expect(
       resolvePurchaseContractPdfFontPath(
         { PURCHASE_CONTRACT_PDF_FONT_PATH: " /opt/fonts/custom.otf " },
         assertReadable,
-        assertBoldGlyphCoverage,
+        assertGlyphCoverage,
       ),
     ).resolves.toBe("/opt/fonts/custom.otf");
     expect(assertReadable).toHaveBeenCalledTimes(2);
@@ -629,7 +741,12 @@ describe("Purchase Contract PDF font resolution", () => {
       2,
       PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
     );
-    expect(assertBoldGlyphCoverage).toHaveBeenCalledWith(
+    expect(assertGlyphCoverage).toHaveBeenNthCalledWith(
+      1,
+      "/opt/fonts/custom.otf",
+    );
+    expect(assertGlyphCoverage).toHaveBeenNthCalledWith(
+      2,
       PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
     );
   });
@@ -646,7 +763,7 @@ describe("Purchase Contract PDF font resolution", () => {
   it("fails with the same safe error when the bundled bold font is missing", async () => {
     const assertReadable = vi.fn(async (fontPath: string) => {
       if (fontPath === PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH) {
-        throw new Error("ENOENT /private/internal/NotoSansCJKsc-Bold.otf");
+        throw new Error("ENOENT /private/internal/NotoSerifCJKsc-Bold.otf");
       }
     });
 
@@ -656,23 +773,26 @@ describe("Purchase Contract PDF font resolution", () => {
     expect(assertReadable).toHaveBeenCalledTimes(2);
   });
 
-  it("fails with the same safe error when required bold glyphs are missing", async () => {
+  it.each([
+    PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+    PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
+  ])("fails safely when required glyphs are missing from %s", async (targetPath) => {
     const assertReadable = vi.fn().mockResolvedValue(undefined);
-    const assertBoldGlyphCoverage = vi.fn(() => {
-      throw new Error("missing glyph at /private/internal/font.otf");
+    const assertGlyphCoverage = vi.fn((fontPath: string) => {
+      if (fontPath === targetPath) {
+        throw new Error("missing glyph at /private/internal/font.otf");
+      }
     });
 
     await expect(
       resolvePurchaseContractPdfFontPath(
         {},
         assertReadable,
-        assertBoldGlyphCoverage,
+        assertGlyphCoverage,
       ),
     ).rejects.toEqual(new PurchaseContractPdfFontError());
     expect(assertReadable).toHaveBeenCalledTimes(2);
-    expect(assertBoldGlyphCoverage).toHaveBeenCalledWith(
-      PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
-    );
+    expect(assertGlyphCoverage).toHaveBeenCalledWith(targetPath);
   });
 });
 
@@ -688,7 +808,7 @@ describe("Purchase Contract PDF response filename", () => {
       'filename="purchase-contract-PUR26WS0001.pdf"',
     );
     expect(decodeURIComponent(encodedFilename ?? "")).toBe(
-      "天津纬信科技有限公司采购合同PUR26WS0001.pdf",
+      "采购合同-PUR26WS0001-天津纬信科技有限公司.pdf",
     );
   });
 
@@ -716,7 +836,7 @@ describe("Purchase Contract PDF response filename", () => {
     const encodedFilename = header.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
 
     expect(decodeURIComponent(encodedFilename ?? "")).toBe(
-      "采购合同PUR26WS0001.pdf",
+      "采购合同-PUR26WS0001.pdf",
     );
   });
 });

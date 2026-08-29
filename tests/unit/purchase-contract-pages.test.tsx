@@ -218,6 +218,8 @@ describe("Purchase Contract pages", () => {
     expect(html).toContain("添加明细");
     expect(html).toContain("删除行");
     expect(html).toContain("合同总金额（元）");
+    expect(html).toContain("合同变更");
+    expect(html).not.toContain("变更条款");
     expect(html).toContain("← 返回采购合同列表");
     expect(html).toContain(">取消</a>");
     expect(createButton).toContain("bg-[#16A34A]");

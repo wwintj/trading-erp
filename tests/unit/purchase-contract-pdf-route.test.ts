@@ -115,7 +115,7 @@ describe("Purchase Contract PDF route response", () => {
         .get("Content-Disposition")
         ?.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
       expect(decodeURIComponent(encodedFilename ?? "")).toBe(
-        "买方快照名称采购合同PUR26WS0826.pdf",
+        "采购合同-PUR26WS0826-买方快照名称.pdf",
       );
       expect(
         Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString(),
@@ -187,7 +187,7 @@ describe("Purchase Contract PDF route response", () => {
 
     expect(response.status).toBe(503);
     expect(body).toBe("采购合同 PDF 字体不可用，请联系管理员。");
-    expect(body).not.toContain("FandolFang-Regular.otf");
+    expect(body).not.toContain("NotoSerifCJKsc-Regular.otf");
   });
 
   it("fails safely when persisted financial values are inconsistent", async () => {

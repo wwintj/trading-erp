@@ -26,8 +26,10 @@ export const PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH = path.join(
   "FandolHei-Bold.otf",
 );
 
-export const PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN = "right" as const;
-export const PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN = "left" as const;
+export const PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN = "left" as const;
+export const PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN = "left" as const;
 export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH = 62;
 export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH = 46;
 export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
@@ -169,10 +171,10 @@ export function purchaseContractPdfHeaderMetadataLayout() {
   return {
     labelX,
     labelWidth: PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
-    labelAlign: PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
+    labelAlign: PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN,
     valueX: labelX + PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
     valueWidth: width - PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
-    valueAlign: PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
+    valueAlign: PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN,
     rightEdge: PAGE_WIDTH - CONTENT_MARGIN,
   };
 }
@@ -527,10 +529,10 @@ export function purchaseContractPdfPartyColumnLayout(
   return {
     labelX: startX,
     labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
-    labelAlign: PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
+    labelAlign: PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
     valueX: startX + PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
     valueWidth: columnWidth - PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH - 5,
-    valueAlign: PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
+    valueAlign: PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
   };
 }
 

@@ -25,11 +25,13 @@ import {
   PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
   PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
-  PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
-  PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
+  PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+  PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN,
   PURCHASE_CONTRACT_PDF_LAYOUT,
+  PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+  PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
   PurchaseContractPdfFontError,
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
@@ -241,10 +243,10 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(layout).toMatchObject({
       labelWidth: PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
       labelAlign: "right",
-      valueAlign: "left",
+      valueAlign: "right",
     });
-    expect(PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN).toBe("right");
-    expect(PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN).toBe("left");
+    expect(PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN).toBe("right");
+    expect(PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN).toBe("right");
     expect(layout.valueX).toBe(layout.labelX + layout.labelWidth);
     expect(layout.valueX + layout.valueWidth).toBeCloseTo(layout.rightEdge);
     expect(layout.rightEdge).toBeCloseTo(595.22 - 36);
@@ -303,12 +305,14 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(columnLayout).toEqual({
       labelX: 36,
       labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
-      labelAlign: "right",
+      labelAlign: "left",
       valueX: 82,
       valueWidth: 200.61,
       valueAlign: "left",
     });
-    expect(columnLayout.labelAlign).toBe("right");
+    expect(PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN).toBe("left");
+    expect(PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN).toBe("left");
+    expect(columnLayout.labelAlign).toBe("left");
     expect(columnLayout.valueAlign).toBe("left");
     const rowHeights = purchaseContractPdfSharedPartyRowHeights(
       buyerRows,

@@ -15,6 +15,7 @@ import {
   PURCHASE_CONTRACT_SAVE_INTENTS,
   calculateExactContractItemAmount,
   calculateExactContractTotal,
+  type PurchaseContractFormState,
   type PurchaseContractInput,
 } from "@/lib/purchase-contract";
 import { notifyPurchaseContract } from "@/lib/purchase-contract-feedback";
@@ -44,7 +45,63 @@ export type ContractFormValues = Omit<PurchaseContractInput, "items"> & {
   items: ContractFormItem[];
 };
 
-type FormRow = ContractFormItem & { key: number };
+export type PurchaseContractFormRow = ContractFormItem & { key: number };
+
+export type PurchaseContractSaveNavigation =
+  | { type: "refresh" }
+  | { type: "replace"; href: string }
+  | null;
+
+function serializedContractItems(items: ContractFormItem[]) {
+  return JSON.stringify(
+    items.map(({ itemId, productId, quantity, unitPrice }) => ({
+      ...(itemId ? { itemId } : {}),
+      productId,
+      quantity,
+      unitPrice,
+    })),
+  );
+}
+
+export function synchronizePurchaseContractFormRows(
+  currentRows: PurchaseContractFormRow[],
+  serverItems: ContractFormItem[],
+  allocateKey: () => number,
+): PurchaseContractFormRow[] {
+  const currentRowsByItemId = new Map(
+    currentRows.flatMap((row) => (row.itemId ? [[row.itemId, row] as const] : [])),
+  );
+  const usedKeys = new Set<number>();
+
+  return serverItems.map((item, index) => {
+    const matchingRow = item.itemId
+      ? currentRowsByItemId.get(item.itemId)
+      : undefined;
+    const indexedRow = currentRows[index];
+    const reusableKey = matchingRow?.key ?? indexedRow?.key;
+    const key =
+      reusableKey !== undefined && !usedKeys.has(reusableKey)
+        ? reusableKey
+        : allocateKey();
+    usedKeys.add(key);
+    return { ...item, key };
+  });
+}
+
+export function getPurchaseContractSaveNavigation(
+  contractId: string | null,
+  state: PurchaseContractFormState,
+): PurchaseContractSaveNavigation {
+  if (state.status !== "success") {
+    return null;
+  }
+  if (contractId) {
+    return { type: "refresh" };
+  }
+  return state.contractId
+    ? { type: "replace", href: `/purchase-contracts/${state.contractId}` }
+    : null;
+}
 
 export const PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION =
   "将使用当前供应商主档覆盖本草稿中的卖方名称、地址、电话、联系人及银行资料。合同其它内容不会改变。是否继续？";
@@ -70,18 +127,42 @@ export function PurchaseContractForm({
 }) {
   const router = useRouter();
   const nextKey = useRef(initialValues.items.length);
-  const [rows, setRows] = useState<FormRow[]>(() =>
+  const [rows, setRows] = useState<PurchaseContractFormRow[]>(() =>
     initialValues.items.map((item, index) => ({ ...item, key: index })),
   );
   const [state, formAction, pending] = useActionState(
     savePurchaseContractAction,
     INITIAL_PURCHASE_CONTRACT_FORM_STATE,
   );
+  const handledState = useRef(state);
+
+  const serverItemsSignature = serializedContractItems(initialValues.items);
 
   useEffect(() => {
+    setRows((currentRows) => {
+      if (serializedContractItems(currentRows) === serverItemsSignature) {
+        return currentRows;
+      }
+      const serverItems = JSON.parse(serverItemsSignature) as ContractFormItem[];
+      return synchronizePurchaseContractFormRows(
+        currentRows,
+        serverItems,
+        () => nextKey.current++,
+      );
+    });
+  }, [serverItemsSignature]);
+
+  useEffect(() => {
+    if (handledState.current === state) {
+      return;
+    }
+    handledState.current = state;
     notifyPurchaseContract(state);
-    if (!contractId && state.status === "success" && state.contractId) {
-      router.replace(`/purchase-contracts/${state.contractId}`);
+    const navigation = getPurchaseContractSaveNavigation(contractId, state);
+    if (navigation?.type === "replace") {
+      router.replace(navigation.href);
+    } else if (navigation?.type === "refresh") {
+      router.refresh();
     }
   }, [contractId, router, state]);
 
@@ -109,14 +190,7 @@ export function PurchaseContractForm({
     );
   }
 
-  const serializedItems = JSON.stringify(
-    rows.map(({ itemId, productId, quantity, unitPrice }) => ({
-      ...(itemId ? { itemId } : {}),
-      productId,
-      quantity,
-      unitPrice,
-    })),
-  );
+  const serializedItems = serializedContractItems(rows);
   const displayedTotal = calculateExactContractTotal(rows)?.totalAmount ?? "—";
 
   return (
@@ -225,6 +299,10 @@ export function PurchaseContractForm({
             );
             return (
               <div key={row.key} className="rounded-md border p-4">
+                <PurchaseContractItemIdentityError
+                  index={index}
+                  fieldErrors={state.fieldErrors}
+                />
                 <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-start">
                   <FormField
                     label={`产品 ${index + 1}`}
@@ -376,6 +454,17 @@ export function PurchaseContractForm({
       </div>
     </form>
   );
+}
+
+export function PurchaseContractItemIdentityError({
+  index,
+  fieldErrors,
+}: {
+  index: number;
+  fieldErrors?: Record<string, string>;
+}) {
+  const message = fieldErrors?.[`items.${index}.itemId`];
+  return message ? <FieldError message={message} /> : null;
 }
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) {

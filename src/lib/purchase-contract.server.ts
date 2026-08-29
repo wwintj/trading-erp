@@ -166,6 +166,7 @@ async function prepareContractData(
         : product;
 
     return {
+      ...(existingItem ? { id: existingItem.id } : {}),
       productId: product.id,
       sortOrder: index,
       productCode: snapshotProduct.code,

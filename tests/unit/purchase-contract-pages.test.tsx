@@ -45,7 +45,10 @@ import NewPurchaseContractPage from "@/app/purchase-contracts/new/page";
 import PurchaseContractsPage from "@/app/purchase-contracts/page";
 import {
   PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION,
+  PurchaseContractItemIdentityError,
   confirmPurchaseContractSupplierRefresh,
+  getPurchaseContractSaveNavigation,
+  synchronizePurchaseContractFormRows,
 } from "@/components/purchase-contract/purchase-contract-form";
 import {
   PURCHASE_CONTRACT_STATUS_CONFIRMATIONS,
@@ -235,6 +238,97 @@ describe("Purchase Contract pages", () => {
     expect(html).not.toContain("更新供应商资料");
     expect(createButton).toContain('name="intent"');
     expect(createButton).toContain('value="save"');
+  });
+
+  it("refreshes existing successful saves once and only replaces after create", () => {
+    expect(
+      getPurchaseContractSaveNavigation("contract-1", {
+        status: "success",
+        message: "采购合同保存成功。",
+        contractId: "contract-1",
+      }),
+    ).toEqual({ type: "refresh" });
+    expect(
+      getPurchaseContractSaveNavigation(null, {
+        status: "success",
+        message: "采购合同创建成功。",
+        contractId: "contract-2",
+      }),
+    ).toEqual({
+      type: "replace",
+      href: "/purchase-contracts/contract-2",
+    });
+    expect(
+      getPurchaseContractSaveNavigation("contract-1", {
+        status: "error",
+        message: "请检查并修正标记的字段。",
+      }),
+    ).toBeNull();
+  });
+
+  it("resyncs a newly created itemId while preserving stable local row keys", () => {
+    const allocateKey = vi.fn(() => 99);
+    const rows = synchronizePurchaseContractFormRows(
+      [
+        {
+          key: 10,
+          itemId: "item-1",
+          productId: "product-1",
+          quantity: "6400",
+          unitPrice: "0.900",
+        },
+        {
+          key: 11,
+          productId: "product-1",
+          quantity: "2",
+          unitPrice: "3",
+        },
+      ],
+      [
+        {
+          itemId: "item-1",
+          productId: "product-1",
+          quantity: "6400.000",
+          unitPrice: "0.9000",
+        },
+        {
+          itemId: "item-2",
+          productId: "product-1",
+          quantity: "2.000",
+          unitPrice: "3.0000",
+        },
+      ],
+      allocateKey,
+    );
+
+    expect(rows).toEqual([
+      {
+        key: 10,
+        itemId: "item-1",
+        productId: "product-1",
+        quantity: "6400.000",
+        unitPrice: "0.9000",
+      },
+      {
+        key: 11,
+        itemId: "item-2",
+        productId: "product-1",
+        quantity: "2.000",
+        unitPrice: "3.0000",
+      },
+    ]);
+    expect(allocateKey).not.toHaveBeenCalled();
+  });
+
+  it("renders an item identity validation error inside the item card", () => {
+    const html = renderToStaticMarkup(
+      <PurchaseContractItemIdentityError
+        index={0}
+        fieldErrors={{ "items.0.itemId": "合同明细身份无效。" }}
+      />,
+    );
+
+    expect(html).toContain("合同明细身份无效。");
   });
 
   it("renders Draft editable for admin and read-only for user", async () => {

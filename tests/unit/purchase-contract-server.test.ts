@@ -343,6 +343,89 @@ describe("Purchase Contract persistence", () => {
     expect(updateData.items.create[0].quantity.toFixed(3)).toBe("6400.000");
   });
 
+  it("preserves item identity through Supplier refresh followed by a normal save", async () => {
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({ paymentTerms: "刷新供应商时保存的条款" }),
+      { refreshSellerSnapshot: true },
+    );
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({ paymentTerms: "随后普通保存的条款" }),
+    );
+
+    expect(mocks.transaction.purchaseContract.update).toHaveBeenCalledTimes(2);
+    for (const [call] of mocks.transaction.purchaseContract.update.mock.calls) {
+      expect(call.data.items.create[0].id).toBe("item-1");
+    }
+  });
+
+  it("preserves item identity across two consecutive normal Draft saves", async () => {
+    await updatePurchaseContract("contract-1", draftUpdateInput());
+    await updatePurchaseContract("contract-1", draftUpdateInput());
+
+    expect(mocks.transaction.purchaseContract.update).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.transaction.purchaseContract.update.mock.calls.map(
+        ([call]) => call.data.items.create[0].id,
+      ),
+    ).toEqual(["item-1", "item-1"]);
+  });
+
+  it("accepts a server-synced new row ID on the next Draft save", async () => {
+    const firstSaveItems = [
+      ...draftUpdateInput().items,
+      { productId: "product-1", quantity: "2", unitPrice: "3" },
+    ];
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({ items: firstSaveItems }),
+    );
+
+    const firstCreate =
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data.items.create;
+    expect(firstCreate[0].id).toBe("item-1");
+    expect(firstCreate[1]).not.toHaveProperty("id");
+
+    mocks.transaction.purchaseContract.findUnique.mockResolvedValue({
+      ...existingDraftContract(),
+      items: [
+        existingDraftContract().items[0],
+        {
+          id: "item-2",
+          productId: "product-1",
+          productCode: "WS-H42",
+          productName: "新增行产品",
+          specification: null,
+          unit: "米",
+        },
+      ],
+    });
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({
+        items: [
+          draftUpdateInput().items[0],
+          {
+            itemId: "item-2",
+            productId: "product-1",
+            quantity: "2.000",
+            unitPrice: "3.0000",
+          },
+        ],
+      }),
+    );
+
+    const secondCreate =
+      mocks.transaction.purchaseContract.update.mock.calls[1][0].data.items.create;
+    expect(secondCreate.map((item: { id?: string }) => item.id)).toEqual([
+      "item-1",
+      "item-2",
+    ]);
+  });
+
   it.each(["FINAL", "CANCELLED"])(
     "rejects explicit Supplier refresh while status is %s",
     async (status) => {
@@ -459,6 +542,7 @@ describe("Purchase Contract persistence", () => {
     const itemData =
       mocks.transaction.purchaseContract.update.mock.calls[0][0].data.items.create[0];
     expect(itemData).toMatchObject({
+      id: "item-1",
       productId: "product-2",
       productCode: "NEW-2",
       productName: "新选择的产品",

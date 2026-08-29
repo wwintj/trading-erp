@@ -559,15 +559,59 @@ export function purchaseContractPdfPartyRows(
 export function purchaseContractPdfPartyColumnLayout(
   startX: number,
   columnWidth: number,
+  measureText: (text: string) => number,
 ) {
+  const targetLabelTextWidth = Math.max(
+    ...["买方", "卖方", "地址", "电话", "联系人", "盖章"].map(measureText),
+  );
+  const valueX = startX + PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH;
+  const colonX = startX + targetLabelTextWidth;
   return {
-    labelX: startX,
+    labelTextX: startX,
+    labelTextWidth: targetLabelTextWidth,
+    labelTextAlign: PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
+    colonX,
+    colonWidth: valueX - colonX,
     labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
-    labelAlign: PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
-    valueX: startX + PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+    valueX,
     valueWidth: columnWidth - PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH - 5,
     valueAlign: PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
   };
+}
+
+export function purchaseContractPdfPartyLabelCharacterSpacing(
+  label: string,
+  targetLabelTextWidth: number,
+  measureText: (text: string) => number,
+) {
+  const characters = Array.from(label);
+  if (characters.length <= 1) {
+    return 0;
+  }
+
+  const availableSpacing = targetLabelTextWidth - measureText(label);
+  return Math.max(0, availableSpacing / (characters.length - 1));
+}
+
+function renderDistributedPartyLabel(
+  document: PDFKit.PDFDocument,
+  label: string,
+  startX: number,
+  targetLabelTextWidth: number,
+  y: number,
+  measureText: (text: string) => number,
+) {
+  const characterSpacing = purchaseContractPdfPartyLabelCharacterSpacing(
+    label,
+    targetLabelTextWidth,
+    measureText,
+  );
+  let characterX = startX;
+
+  for (const character of Array.from(label)) {
+    document.text(character, characterX, y, { lineBreak: false });
+    characterX += measureText(character) + characterSpacing;
+  }
 }
 
 export function purchaseContractPdfSharedPartyRowHeights(
@@ -596,16 +640,19 @@ function renderBottomPartyBlock(
   const columnWidth = (contentWidth(document) - gap) / 2;
   const buyerRows = purchaseContractPdfPartyRows("买方", model.buyer);
   const sellerRows = purchaseContractPdfPartyRows("卖方", model.seller);
+  document.fontSize(BODY_FONT_SIZE);
+  const measureLabelText = (text: string) => document.widthOfString(text);
   const buyerLayout = purchaseContractPdfPartyColumnLayout(
     CONTENT_MARGIN,
     columnWidth,
+    measureLabelText,
   );
   const sellerStartX = CONTENT_MARGIN + columnWidth + gap;
   const sellerLayout = purchaseContractPdfPartyColumnLayout(
     sellerStartX,
     columnWidth,
+    measureLabelText,
   );
-  document.fontSize(BODY_FONT_SIZE);
   const rowHeights = purchaseContractPdfSharedPartyRowHeights(
     buyerRows,
     sellerRows,
@@ -634,22 +681,35 @@ function renderBottomPartyBlock(
   let rowY = y + 7;
   buyerRows.forEach((buyerRow, index) => {
     const sellerRow = sellerRows[index];
-    document
-      .fontSize(BODY_FONT_SIZE)
-      .text(`${buyerRow.label}：`, buyerLayout.labelX, rowY, {
-        width: buyerLayout.labelWidth,
-        align: buyerLayout.labelAlign,
-        lineGap: 2,
-      });
+    document.fontSize(BODY_FONT_SIZE);
+    renderDistributedPartyLabel(
+      document,
+      buyerRow.label,
+      buyerLayout.labelTextX,
+      buyerLayout.labelTextWidth,
+      rowY,
+      measureLabelText,
+    );
+    document.text("：", buyerLayout.colonX, rowY, {
+      width: buyerLayout.colonWidth,
+      lineBreak: false,
+    });
     document.text(buyerRow.value, buyerLayout.valueX, rowY, {
       width: buyerLayout.valueWidth,
       align: buyerLayout.valueAlign,
       lineGap: 2,
     });
-    document.text(`${sellerRow.label}：`, sellerLayout.labelX, rowY, {
-      width: sellerLayout.labelWidth,
-      align: sellerLayout.labelAlign,
-      lineGap: 2,
+    renderDistributedPartyLabel(
+      document,
+      sellerRow.label,
+      sellerLayout.labelTextX,
+      sellerLayout.labelTextWidth,
+      rowY,
+      measureLabelText,
+    );
+    document.text("：", sellerLayout.colonX, rowY, {
+      width: sellerLayout.colonWidth,
+      lineBreak: false,
     });
     document.text(sellerRow.value, sellerLayout.valueX, rowY, {
       width: sellerLayout.valueWidth,

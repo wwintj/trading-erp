@@ -70,7 +70,8 @@ export async function getPurchaseContractPdfResponse(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": purchaseContractPdfContentDisposition(
-          contract.contractNo,
+          model.buyer.legalName,
+          model.contractNo,
         ),
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",

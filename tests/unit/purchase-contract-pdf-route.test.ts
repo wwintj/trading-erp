@@ -111,6 +111,12 @@ describe("Purchase Contract PDF route response", () => {
       expect(response.headers.get("Content-Disposition")).toContain(
         'filename="purchase-contract-PUR26WS0826.pdf"',
       );
+      const encodedFilename = response.headers
+        .get("Content-Disposition")
+        ?.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
+      expect(decodeURIComponent(encodedFilename ?? "")).toBe(
+        "买方快照名称采购合同PUR26WS0826.pdf",
+      );
       expect(
         Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString(),
       ).toBe("%PDF-");

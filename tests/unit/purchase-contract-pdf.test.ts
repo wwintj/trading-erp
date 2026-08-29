@@ -38,6 +38,7 @@ import {
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
   purchaseContractPdfPartyColumnLayout,
+  purchaseContractPdfPartyLabelCharacterSpacing,
   purchaseContractPdfPartyRows,
   purchaseContractPdfSharedPartyRowHeights,
   renderPurchaseContractPdf,
@@ -312,27 +313,77 @@ describe("Purchase Contract PDF historical view model", () => {
       sellerRows.slice(1).map((row) => row.label),
     );
 
-    const columnLayout = purchaseContractPdfPartyColumnLayout(36, 251.61);
-    expect(columnLayout).toEqual({
-      labelX: 36,
+    const measureText = (text: string) => Array.from(text).length * 10;
+    const buyerLayout = purchaseContractPdfPartyColumnLayout(
+      36,
+      251.61,
+      measureText,
+    );
+    const sellerLayout = purchaseContractPdfPartyColumnLayout(
+      307.61,
+      251.61,
+      measureText,
+    );
+    expect(buyerLayout).toEqual({
+      labelTextX: 36,
+      labelTextWidth: 30,
+      labelTextAlign: "left",
+      colonX: 66,
+      colonWidth: 16,
       labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
-      labelAlign: "left",
       valueX: 82,
+      valueWidth: 200.61,
+      valueAlign: "left",
+    });
+    expect(sellerLayout).toEqual({
+      labelTextX: 307.61,
+      labelTextWidth: 30,
+      labelTextAlign: "left",
+      colonX: 337.61,
+      colonWidth: 16,
+      labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+      valueX: 353.61,
       valueWidth: 200.61,
       valueAlign: "left",
     });
     expect(PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN).toBe("left");
     expect(PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN).toBe("left");
-    expect(columnLayout.labelAlign).toBe("left");
-    expect(columnLayout.valueAlign).toBe("left");
+    expect(buyerLayout.labelTextX).toBe(36);
+    expect(buyerLayout.labelTextWidth).toBe(sellerLayout.labelTextWidth);
+    expect(buyerLayout.colonX - buyerLayout.labelTextX).toBe(
+      sellerLayout.colonX - sellerLayout.labelTextX,
+    );
+    expect(buyerLayout.valueX).toBe(82);
+    expect(sellerLayout.valueX).toBe(353.61);
+    expect(
+      purchaseContractPdfPartyLabelCharacterSpacing(
+        "买方",
+        buyerLayout.labelTextWidth,
+        measureText,
+      ),
+    ).toBe(10);
+    expect(
+      purchaseContractPdfPartyLabelCharacterSpacing(
+        "卖方",
+        sellerLayout.labelTextWidth,
+        measureText,
+      ),
+    ).toBe(10);
+    expect(
+      purchaseContractPdfPartyLabelCharacterSpacing(
+        "联系人",
+        buyerLayout.labelTextWidth,
+        measureText,
+      ),
+    ).toBe(0);
     const rowHeights = purchaseContractPdfSharedPartyRowHeights(
       buyerRows,
       sellerRows,
       (value) => (value === source.buyerAddress ? 32 : value ? 12 : 0),
     );
     expect(rowHeights).toEqual([16, 35, 16, 16, 42]);
-    expect(columnLayout.valueX).toBe(
-      columnLayout.labelX + columnLayout.labelWidth,
+    expect(buyerLayout.valueX).toBe(
+      buyerLayout.labelTextX + buyerLayout.labelWidth,
     );
   });
 
@@ -627,25 +678,45 @@ describe("Purchase Contract PDF font resolution", () => {
 
 describe("Purchase Contract PDF response filename", () => {
   it("provides an ASCII fallback and UTF-8 Chinese filename", () => {
-    const header = purchaseContractPdfContentDisposition("PUR26WS0826");
+    const header = purchaseContractPdfContentDisposition(
+      "天津纬信科技有限公司",
+      "PUR26WS0001",
+    );
+    const encodedFilename = header.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
 
     expect(header).toContain(
-      'filename="purchase-contract-PUR26WS0826.pdf"',
+      'filename="purchase-contract-PUR26WS0001.pdf"',
     );
-    expect(header).toContain(
-      "filename*=UTF-8''%E9%87%87%E8%B4%AD%E5%90%88%E5%90%8C-PUR26WS0826.pdf",
+    expect(decodeURIComponent(encodedFilename ?? "")).toBe(
+      "天津纬信科技有限公司采购合同PUR26WS0001.pdf",
     );
   });
 
-  it("prevents hostile contract numbers from injecting response headers", () => {
+  it("prevents hostile snapshot values from injecting response headers", () => {
     const header = purchaseContractPdfContentDisposition(
+      '天津"\r\nX-Buyer: yes/../../\\公司:*?<>|',
       'PUR26"\r\nX-Injected: yes/../../\\evil',
     );
+    const encodedFilename = header.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
+    const displayFilename = decodeURIComponent(encodedFilename ?? "");
 
     expect(header).not.toContain("\r");
     expect(header).not.toContain("\n");
     expect(header).toMatch(
       /^attachment; filename="[A-Za-z0-9._-]+\.pdf"; filename\*=UTF-8''[^\s]+$/,
+    );
+    expect(displayFilename).not.toMatch(/["\\/:*?<>|\u0000-\u001f\u007f]/);
+  });
+
+  it("falls back to the generic Chinese prefix when the buyer name is empty", () => {
+    const header = purchaseContractPdfContentDisposition(
+      '"\r\n/\\:*?<>|',
+      "PUR26WS0001",
+    );
+    const encodedFilename = header.match(/filename\*=UTF-8''([^;]+)$/)?.[1];
+
+    expect(decodeURIComponent(encodedFilename ?? "")).toBe(
+      "采购合同PUR26WS0001.pdf",
     );
   });
 });

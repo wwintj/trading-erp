@@ -456,7 +456,17 @@ function sanitizeDisplayContractNo(contractNo: string): string {
     .replace(/-+/g, "-")
     .trim()
     .slice(0, 64);
-  return sanitized || "采购合同";
+  return sanitized || "contract";
+}
+
+function sanitizeDisplayBuyerLegalName(buyerLegalName: string): string {
+  return buyerLegalName
+    .replace(/[\u0000-\u001f\u007f]/g, "-")
+    .replace(/["\\/:*?<>|]/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 64);
 }
 
 function encodeRfc5987(value: string): string {
@@ -465,9 +475,13 @@ function encodeRfc5987(value: string): string {
   );
 }
 
-export function purchaseContractPdfContentDisposition(contractNo: string): string {
+export function purchaseContractPdfContentDisposition(
+  buyerLegalName: string,
+  contractNo: string,
+): string {
   const asciiFilename = `purchase-contract-${sanitizeAsciiContractNo(contractNo)}.pdf`;
-  const displayFilename = `采购合同-${sanitizeDisplayContractNo(contractNo)}.pdf`;
+  const displayBuyerLegalName = sanitizeDisplayBuyerLegalName(buyerLegalName);
+  const displayFilename = `${displayBuyerLegalName}采购合同${sanitizeDisplayContractNo(contractNo)}.pdf`;
   return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeRfc5987(displayFilename)}`;
 }
 

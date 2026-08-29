@@ -67,6 +67,7 @@ const input: PurchaseContractInput = {
   breachTerms: null,
   qualityTerms: null,
   changeTerms: null,
+  specialNotice: null,
   disputeTerms: null,
   additionalTerms: null,
   items: [{ productId: "product-1", quantity: "6400", unitPrice: "0.900" }],
@@ -200,7 +201,7 @@ describe("Purchase Contract persistence", () => {
   });
 
   it("atomically creates header, snapshots, items, and exact totals", async () => {
-    await createPurchaseContract(input);
+    await createPurchaseContract({ ...input, specialNotice: "重点说明" });
 
     expect(mocks.runTransaction).toHaveBeenCalledWith(
       expect.any(Function),
@@ -210,6 +211,7 @@ describe("Purchase Contract persistence", () => {
     expect(createData.buyerLegalName).toBe("天津纬信科技有限公司");
     expect(createData.sellerLegalName).toBe("惠州市华业升塑胶制品有限公司");
     expect(createData.totalAmount.toString()).toBe("5760");
+    expect(createData.specialNotice).toBe("重点说明");
     expect(createData.items.create[0]).toMatchObject({
       productCode: "WS-H42",
       productName: "PVC热收缩套管",

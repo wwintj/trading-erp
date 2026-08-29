@@ -104,6 +104,7 @@ function contract(status: "DRAFT" | "FINAL" | "CANCELLED" = "DRAFT") {
     breachTerms: null,
     qualityTerms: null,
     changeTerms: null,
+    specialNotice: null,
     disputeTerms: null,
     additionalTerms: null,
     totalAmount: new Prisma.Decimal("5760.00"),
@@ -219,6 +220,10 @@ describe("Purchase Contract pages", () => {
     expect(html).toContain("删除行");
     expect(html).toContain("合同总金额（元）");
     expect(html).toContain("合同变更");
+    expect(html).toContain("特别注意");
+    expect(html).toContain(
+      "可选。填写后将在采购合同 PDF 中以加粗重点说明显示。",
+    );
     expect(html).not.toContain("变更条款");
     expect(html).toContain("← 返回采购合同列表");
     expect(html).toContain(">取消</a>");

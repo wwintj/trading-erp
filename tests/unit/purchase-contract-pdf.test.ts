@@ -15,6 +15,7 @@ import {
   buildPurchaseContractPdfViewModel,
   formatExactAmountWithThousands,
   formatRmbUppercase,
+  normalizePurchaseContractPdfText,
   purchaseContractPdfContentDisposition,
   purchaseContractPdfPageFooter,
   purchaseContractPdfPageFooters,
@@ -34,13 +35,17 @@ import {
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
   PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
   PURCHASE_CONTRACT_PDF_REQUIRED_TEXT,
+  PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH,
+  PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT,
   PurchaseContractPdfFontError,
+  PurchaseContractPdfUnsupportedGlyphError,
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
   purchaseContractPdfPartyColumnLayout,
   purchaseContractPdfPartyLabelCharacterSpacing,
   purchaseContractPdfPartyRows,
   purchaseContractPdfSharedPartyRowHeights,
+  purchaseContractPdfTermLayout,
   renderPurchaseContractPdf,
   resolvePurchaseContractPdfFontPath,
 } from "@/lib/purchase-contract-pdf.server";
@@ -81,6 +86,7 @@ function contractFixture(): PurchaseContractPdfSource {
     breachTerms: "迟延交货按合同约定处理",
     qualityTerms: "符合确认样品，如有异议应及时提出",
     changeTerms: "合同变更须书面确认",
+    specialNotice: "请严格按照指定地址发货。",
     disputeTerms: "争议由双方友好协商解决",
     additionalTerms: null,
     totalAmount: new Prisma.Decimal("5760.00"),
@@ -170,6 +176,7 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model).not.toHaveProperty("specialDelivery");
     expect(model.terms.find((term) => term.label === "交货时间")).toEqual({
       sectionNumber: 4,
+      marker: "四、",
       heading: "四、交货时间：",
       label: "交货时间",
       value: "2026年09月01日",
@@ -203,7 +210,7 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model.terms.some((term) => term.label === "附加条款")).toBe(false);
     expect(model.terms.find((term) => term.label === "合同变更")).toMatchObject({
       value: "合同变更须书面确认",
-      emphasized: true,
+      emphasized: false,
       subLines: [],
     });
   });
@@ -292,7 +299,7 @@ describe("Purchase Contract PDF historical view model", () => {
     ]);
   });
 
-  it("preserves populated multi-line contract change text as bold emphasis", () => {
+  it("preserves populated multi-line contract change text as regular terms", () => {
     const source = contractFixture();
     source.changeTerms =
       "本合同数量允许根据实际生产情况上下浮动5%。\n所有变更须双方书面确认。";
@@ -304,9 +311,77 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(term).toMatchObject({
       value:
         "本合同数量允许根据实际生产情况上下浮动5%。\n所有变更须双方书面确认。",
-      emphasized: true,
+      emphasized: false,
       subLines: [],
     });
+  });
+
+  it.each([null, "", "  \n  "])(
+    "omits a blank special notice (%j)",
+    (specialNotice) => {
+      const source = contractFixture();
+      source.specialNotice = specialNotice;
+
+      expect(buildPurchaseContractPdfViewModel(source).specialNotice).toBeNull();
+    },
+  );
+
+  it("preserves a populated multi-line special notice", () => {
+    const source = contractFixture();
+    source.specialNotice = "第一行重点说明。\r\n第二行重点说明。";
+
+    expect(buildPurchaseContractPdfViewModel(source).specialNotice).toBe(
+      "第一行重点说明。\n第二行重点说明。",
+    );
+  });
+
+  it("normalizes PDF-facing controls and spacing without changing the database value", () => {
+    const stored = "第一\t项\u00a0说明\r\n第二项\u200b\u200c\u200d\ufeff\u0000。";
+
+    expect(normalizePurchaseContractPdfText(stored)).toBe(
+      "第一    项 说明\n第二项。",
+    );
+    expect(stored).toContain("\u200b");
+    expect(normalizePurchaseContractPdfText("中文，标点。\n换行！")).toBe(
+      "中文，标点。\n换行！",
+    );
+  });
+
+  it("uses separate marker, body, and nested delivery columns", () => {
+    const layout = purchaseContractPdfTermLayout();
+
+    expect(PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH).toBe(22);
+    expect(PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT).toBe(22);
+    expect(layout).toEqual({
+      markerX: 36,
+      markerWidth: 22,
+      bodyX: 58,
+      bodyWidth: 501.22,
+      subLineX: 80,
+      subLineWidth: 479.22,
+    });
+    expect(layout.subLineX).toBeGreaterThan(layout.bodyX);
+  });
+
+  it("builds structured markers through ten without parsing headings", () => {
+    const source = contractFixture();
+    source.additionalTerms = "补充约定";
+    const terms = buildPurchaseContractPdfViewModel(source).terms;
+
+    expect(terms.map((term) => term.marker)).toEqual([
+      "二、",
+      "三、",
+      "四、",
+      "五、",
+      "六、",
+      "七、",
+      "八、",
+      "九、",
+      "十、",
+    ]);
+    expect(terms[0]).toMatchObject({ sectionNumber: 2, marker: "二、" });
+    expect(terms[7]).toMatchObject({ sectionNumber: 9, marker: "九、" });
+    expect(terms[8]).toMatchObject({ sectionNumber: 10, marker: "十、" });
   });
 
   it("contains the historical labels and no generic report sections", () => {
@@ -323,8 +398,8 @@ describe("Purchase Contract PDF historical view model", () => {
     }
     expect(PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS[0]).toBe("型号");
     expect(modelText).not.toContain("货号");
-    expect(modelText).not.toContain("特别注意");
-    expect(rendererText).not.toContain("特别注意");
+    expect(modelText).toContain("请严格按照指定地址发货。");
+    expect(rendererText).toContain("特别注意");
     for (const forbidden of [
       "买卖双方",
       "合同明细",
@@ -654,23 +729,128 @@ describe("Purchase Contract PDF bundled fonts", () => {
     expect(pdfPageCount(pdf)).toBe(1);
   });
 
-  it("uses Bold for contract change and restores Regular for following terms", async () => {
+  it("renders contract change entirely in Regular when no notice is present", async () => {
+    const source = contractFixture();
+    source.specialNotice = null;
     const fontSpy = vi.spyOn(PDFDocument.prototype, "font");
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      await renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(source),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const fontCalls = fontSpy.mock.calls.map(([font]) => font);
+      expect(fontCalls).not.toContain(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
+      expect(fontCalls).toContain(PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH);
+      expect(
+        textSpy.mock.calls.some(
+          ([text]) => typeof text === "string" && text.includes("特别注意"),
+        ),
+      ).toBe(false);
+    } finally {
+      textSpy.mockRestore();
+      fontSpy.mockRestore();
+    }
+  });
+
+  it("renders the complete multi-line notice in Bold then restores Regular", async () => {
+    const source = contractFixture();
+    source.specialNotice = "第一行。\n第二行。";
+    const fontSpy = vi.spyOn(PDFDocument.prototype, "font");
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      await renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(source),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const noticeIndex = textSpy.mock.calls.findIndex(
+        ([text]) => text === "特别注意：\n第一行。\n第二行。",
+      );
+      const totalIndex = textSpy.mock.calls.findIndex(
+        ([text]) =>
+          typeof text === "string" && text.startsWith("总计人民币（大写）："),
+      );
+      const boldIndex = fontSpy.mock.calls.findIndex(
+        ([font]) => font === PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
+      );
+      const regularAfterNoticeIndex = fontSpy.mock.calls.findIndex(
+        ([font], index) =>
+          index > boldIndex && font === PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+
+      expect(noticeIndex).toBeGreaterThan(-1);
+      expect(totalIndex).toBeGreaterThan(noticeIndex);
+      expect(boldIndex).toBeGreaterThan(-1);
+      expect(regularAfterNoticeIndex).toBeGreaterThan(boldIndex);
+      expect(fontSpy.mock.invocationCallOrder[boldIndex]).toBeLessThan(
+        textSpy.mock.invocationCallOrder[noticeIndex],
+      );
+      expect(textSpy.mock.invocationCallOrder[noticeIndex]).toBeLessThan(
+        fontSpy.mock.invocationCallOrder[regularAfterNoticeIndex],
+      );
+      expect(fontSpy.mock.invocationCallOrder[regularAfterNoticeIndex]).toBeLessThan(
+        textSpy.mock.invocationCallOrder[totalIndex],
+      );
+    } finally {
+      textSpy.mockRestore();
+      fontSpy.mockRestore();
+    }
+  });
+
+  it("draws numbered terms and delivery sublines in separate hanging-indent boxes", async () => {
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
     try {
       await renderPurchaseContractPdf(
         buildPurchaseContractPdfViewModel(contractFixture()),
         PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
       );
-      const fontCalls = fontSpy.mock.calls.map(([font]) => font);
-      const boldIndex = fontCalls.indexOf(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME);
-
-      expect(boldIndex).toBeGreaterThan(-1);
-      expect(fontCalls.slice(boldIndex + 1)).toContain(
-        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      const layout = purchaseContractPdfTermLayout();
+      const markerCall = textSpy.mock.calls.find(([text]) => text === "二、");
+      const bodyCall = textSpy.mock.calls.find(
+        ([text]) =>
+          typeof text === "string" && text.startsWith("验收方法：按样验收"),
       );
+      const deliveryCall = textSpy.mock.calls.find(
+        ([text]) =>
+          typeof text === "string" && text.startsWith("交货时间：2026年"),
+      );
+      const deliverySubLineCall = textSpy.mock.calls.find(
+        ([text]) =>
+          typeof text === "string" && text.startsWith("发货地址："),
+      );
+
+      expect(markerCall?.[1]).toBe(layout.markerX);
+      expect(markerCall?.[3]).toMatchObject({ width: layout.markerWidth });
+      expect(bodyCall?.[1]).toBe(layout.bodyX);
+      expect(bodyCall?.[3]).toMatchObject({ width: layout.bodyWidth });
+      expect(deliveryCall?.[1]).toBe(layout.bodyX);
+      expect(deliverySubLineCall?.[1]).toBe(layout.subLineX);
+      expect(deliverySubLineCall?.[3]).toMatchObject({
+        width: layout.subLineWidth,
+      });
     } finally {
-      fontSpy.mockRestore();
+      textSpy.mockRestore();
     }
+  });
+
+  it("fails safely for unsupported regular and bold dynamic glyphs", async () => {
+    const regularSource = contractFixture();
+    regularSource.buyerLegalName = "买方😀";
+    await expect(
+      renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(regularSource),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      ),
+    ).rejects.toBeInstanceOf(PurchaseContractPdfUnsupportedGlyphError);
+
+    const boldSource = contractFixture();
+    boldSource.specialNotice = "重点😀";
+    await expect(
+      renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(boldSource),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      ),
+    ).rejects.toBeInstanceOf(PurchaseContractPdfUnsupportedGlyphError);
   });
 
   it("allows long stored terms to flow onto multiple pages", async () => {

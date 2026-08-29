@@ -25,6 +25,7 @@ function contractForm(overrides: Record<string, string> = {}) {
   formData.set("breachTerms", "   ");
   formData.set("qualityTerms", "   ");
   formData.set("changeTerms", "   ");
+  formData.set("specialNotice", "   ");
   formData.set("disputeTerms", "   ");
   formData.set("additionalTerms", "   ");
   formData.set(
@@ -99,6 +100,24 @@ describe("Purchase Contract validation", () => {
       expect(result.input.items[0]).not.toHaveProperty("amount");
       expect(result.input).not.toHaveProperty("totalAmount");
     }
+  });
+
+  it("parses an optional special notice and enforces its 10000-character limit", () => {
+    const result = validatePurchaseContractForm(
+      contractForm({ specialNotice: "  请重点检查发货地址。  " }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      input: { specialNotice: "请重点检查发货地址。" },
+    });
+
+    const tooLong = validatePurchaseContractForm(
+      contractForm({ specialNotice: "注".repeat(10_001) }),
+    );
+    expect(tooLong).toMatchObject({
+      ok: false,
+      fieldErrors: { specialNotice: "不能超过 10000 个字符。" },
+    });
   });
 
   it("preserves a valid Draft itemId as untrusted row identity input", () => {

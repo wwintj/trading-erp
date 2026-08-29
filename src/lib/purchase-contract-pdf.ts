@@ -39,6 +39,7 @@ export type PurchaseContractPdfSource = {
   breachTerms: string | null;
   qualityTerms: string | null;
   changeTerms: string | null;
+  specialNotice: string | null;
   disputeTerms: string | null;
   additionalTerms: string | null;
   totalAmount: DecimalValue;
@@ -102,11 +103,13 @@ export type PurchaseContractPdfViewModel = {
     amountDisplay: string;
   }>;
   remarks: PurchaseContractPdfRemarkLine[];
+  specialNotice: string | null;
   totalAmount: string;
   totalAmountDisplay: string;
   totalAmountUppercase: string;
   terms: Array<{
     sectionNumber: number;
+    marker: string;
     heading: string;
     label: string;
     value: string;
@@ -121,8 +124,17 @@ export class PurchaseContractPdfIntegrityError extends Error {
   }
 }
 
+export function normalizePurchaseContractPdfText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\t/g, "    ")
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
+    .replace(/[\u200b-\u200d\u2060\ufeff]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
+}
+
 function requiredText(value: string): string {
-  const normalized = value.trim();
+  const normalized = normalizePurchaseContractPdfText(value).trim();
   if (!normalized) {
     throw new PurchaseContractPdfIntegrityError();
   }
@@ -130,7 +142,7 @@ function requiredText(value: string): string {
 }
 
 function optionalText(value: string | null): string | null {
-  const normalized = value?.trim() ?? "";
+  const normalized = normalizePurchaseContractPdfText(value ?? "").trim();
   return normalized || null;
 }
 
@@ -416,7 +428,7 @@ export function buildPurchaseContractPdfViewModel(
     deliveryTerm,
     optionalTerm("货款结算", optionalText(source.paymentTerms)),
     optionalTerm("运输方式及费用承担", optionalText(source.shippingMethod)),
-    optionalTerm("合同变更", optionalText(source.changeTerms), true),
+    optionalTerm("合同变更", optionalText(source.changeTerms)),
     optionalTerm("争议解决", optionalText(source.disputeTerms)),
     optionalTerm("违约责任", optionalText(source.breachTerms)),
     optionalTerm("附加条款", optionalText(source.additionalTerms)),
@@ -427,6 +439,7 @@ export function buildPurchaseContractPdfViewModel(
       const sectionNumber = index + 2;
       return {
         sectionNumber,
+        marker: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、`,
         heading: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、${term.label}：`,
         label: term.label,
         value: term.value,
@@ -461,6 +474,7 @@ export function buildPurchaseContractPdfViewModel(
     itemTableLabels: PURCHASE_CONTRACT_PDF_ITEM_TABLE_LABELS,
     items,
     remarks: purchaseContractPdfRemarkLines(source.packagingTerms),
+    specialNotice: optionalText(source.specialNotice),
     totalAmount,
     totalAmountDisplay: `¥${formatExactAmountWithThousands(totalAmount)}`,
     totalAmountUppercase: formatRmbUppercase(totalAmount),

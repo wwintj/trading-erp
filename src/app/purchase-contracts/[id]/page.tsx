@@ -103,6 +103,7 @@ function toFormValues(
     breachTerms: contract.breachTerms,
     qualityTerms: contract.qualityTerms,
     changeTerms: contract.changeTerms,
+    specialNotice: contract.specialNotice,
     disputeTerms: contract.disputeTerms,
     additionalTerms: contract.additionalTerms,
     items: contract.items.map((item) => ({
@@ -150,6 +151,7 @@ function PurchaseContractDetails({
     ["违约/迟延条款", contract.breachTerms],
     ["质量条款", contract.qualityTerms],
     ["变更条款", contract.changeTerms],
+    ["特别注意", contract.specialNotice],
     ["争议解决", contract.disputeTerms],
     ["补充条款", contract.additionalTerms],
   ];

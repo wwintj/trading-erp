@@ -232,6 +232,7 @@ async function prepareContractData(
       breachTerms: input.breachTerms,
       qualityTerms: input.qualityTerms,
       changeTerms: input.changeTerms,
+      specialNotice: input.specialNotice,
       disputeTerms: input.disputeTerms,
       additionalTerms: input.additionalTerms,
       totalAmount: new Prisma.Decimal(totals.totalAmount),

@@ -305,6 +305,20 @@ export function PurchaseContractForm({
             <ContractTextarea name={name} value={initialValues[name]} disabled={pending} />
           </FormField>
         ))}
+        <FormField
+          label="特别注意"
+          error={state.fieldErrors?.specialNotice}
+          wide
+        >
+          <ContractTextarea
+            name="specialNotice"
+            value={initialValues.specialNotice}
+            disabled={pending}
+          />
+          <p className="text-sm text-neutral-500">
+            可选。填写后将在采购合同 PDF 中以加粗重点说明显示。
+          </p>
+        </FormField>
       </FormSection>
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-6">

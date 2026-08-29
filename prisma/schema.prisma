@@ -168,6 +168,7 @@ model PurchaseContract {
   breachTerms             String?                @db.Text
   qualityTerms            String?                @db.Text
   changeTerms             String?                @db.Text
+  specialNotice           String?                @map("special_notice") @db.Text
   disputeTerms            String?                @db.Text
   additionalTerms         String?                @db.Text
   totalAmount             Decimal                @db.Decimal(18, 2)

@@ -65,6 +65,7 @@ export default async function NewPurchaseContractPage() {
     breachTerms: null,
     qualityTerms: null,
     changeTerms: null,
+    specialNotice: null,
     disputeTerms: null,
     additionalTerms: null,
     items: [

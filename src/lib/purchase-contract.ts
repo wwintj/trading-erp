@@ -23,6 +23,7 @@ export const PURCHASE_CONTRACT_FIELD_LIMITS = {
   breachTerms: 10000,
   qualityTerms: 10000,
   changeTerms: 10000,
+  specialNotice: 10000,
   disputeTerms: 10000,
   additionalTerms: 10000,
 } as const;
@@ -62,6 +63,7 @@ export type PurchaseContractInput = {
   breachTerms: string | null;
   qualityTerms: string | null;
   changeTerms: string | null;
+  specialNotice: string | null;
   disputeTerms: string | null;
   additionalTerms: string | null;
   items: PurchaseContractItemInput[];
@@ -366,6 +368,7 @@ export function validatePurchaseContractForm(formData: FormData):
       breachTerms: optionalValue(optionalValues.breachTerms),
       qualityTerms: optionalValue(optionalValues.qualityTerms),
       changeTerms: optionalValue(optionalValues.changeTerms),
+      specialNotice: optionalValue(optionalValues.specialNotice),
       disputeTerms: optionalValue(optionalValues.disputeTerms),
       additionalTerms: optionalValue(optionalValues.additionalTerms),
       items,

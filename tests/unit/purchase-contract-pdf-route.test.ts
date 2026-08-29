@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { Prisma } from "@/generated/prisma/client";
-import { PurchaseContractPdfFontError } from "@/lib/purchase-contract-pdf.server";
+import {
+  PurchaseContractPdfFontError,
+  PurchaseContractPdfUnsupportedGlyphError,
+} from "@/lib/purchase-contract-pdf.server";
 import { getPurchaseContractPdfResponse } from "@/lib/purchase-contract-pdf-route.server";
 
 function contractFixture(status: "DRAFT" | "FINAL" | "CANCELLED" = "FINAL") {
@@ -38,6 +41,7 @@ function contractFixture(status: "DRAFT" | "FINAL" | "CANCELLED" = "FINAL") {
     breachTerms: null,
     qualityTerms: null,
     changeTerms: null,
+    specialNotice: null,
     disputeTerms: null,
     additionalTerms: null,
     totalAmount: new Prisma.Decimal("5760.00"),
@@ -188,6 +192,26 @@ describe("Purchase Contract PDF route response", () => {
     expect(response.status).toBe(503);
     expect(body).toBe("采购合同 PDF 字体不可用，请联系管理员。");
     expect(body).not.toContain("NotoSerifCJKsc-Regular.otf");
+  });
+
+  it("returns a distinct path-free safe error for unsupported dynamic glyphs", async () => {
+    const response = await getPurchaseContractPdfResponse(
+      request,
+      "contract-1",
+      dependencies({
+        renderPdf: vi
+          .fn()
+          .mockRejectedValue(new PurchaseContractPdfUnsupportedGlyphError()),
+      }),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(422);
+    expect(body).toBe(
+      "采购合同包含当前 PDF 字体不支持的字符，请检查合同内容后重试。",
+    );
+    expect(body).not.toContain("/private/internal/font.otf");
+    expect(body).not.toContain("U+");
   });
 
   it("fails safely when persisted financial values are inconsistent", async () => {

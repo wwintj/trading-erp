@@ -8,6 +8,7 @@ import {
 } from "@/lib/purchase-contract-pdf";
 import {
   PurchaseContractPdfFontError,
+  PurchaseContractPdfUnsupportedGlyphError,
   renderPurchaseContractPdf,
   resolvePurchaseContractPdfFontPath,
 } from "@/lib/purchase-contract-pdf.server";
@@ -83,6 +84,12 @@ export async function getPurchaseContractPdfResponse(
     }
     if (error instanceof PurchaseContractPdfFontError) {
       return textResponse("采购合同 PDF 字体不可用，请联系管理员。", 503);
+    }
+    if (error instanceof PurchaseContractPdfUnsupportedGlyphError) {
+      return textResponse(
+        "采购合同包含当前 PDF 字体不支持的字符，请检查合同内容后重试。",
+        422,
+      );
     }
     return textResponse("采购合同 PDF 生成失败，请稍后重试。", 500);
   }

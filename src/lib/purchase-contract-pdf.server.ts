@@ -38,10 +38,18 @@ export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING = 2;
 export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH = 46;
 export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
   "PurchaseContractBoldFont";
+export const PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH = 22;
+export const PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT = 22;
 
 export class PurchaseContractPdfFontError extends Error {
   constructor() {
     super("Purchase contract PDF font is unavailable");
+  }
+}
+
+export class PurchaseContractPdfUnsupportedGlyphError extends Error {
+  constructor() {
+    super("Purchase contract PDF text contains an unsupported glyph");
   }
 }
 
@@ -110,6 +118,21 @@ const {
 const BODY_FONT_SIZE = 10.5;
 const BODY_LINE_GAP = 1.4;
 
+export function purchaseContractPdfTermLayout() {
+  const bodyX = CONTENT_MARGIN + PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH;
+  const bodyWidth =
+    PAGE_WIDTH - CONTENT_MARGIN - bodyX;
+  const subLineX = bodyX + PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT;
+  return {
+    markerX: CONTENT_MARGIN,
+    markerWidth: PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH,
+    bodyX,
+    bodyWidth,
+    subLineX,
+    subLineWidth: PAGE_WIDTH - CONTENT_MARGIN - subLineX,
+  };
+}
+
 function bodyBottom(document: PDFKit.PDFDocument): number {
   return document.page.height - PAGE_BOTTOM_MARGIN;
 }
@@ -149,6 +172,109 @@ function registerFont(
   }
 
   document.registerFont(fontName, fontSource);
+}
+
+function glyphFont(
+  fontSource: PurchaseContractPdfFontSource,
+): fontkit.Font {
+  const source =
+    typeof fontSource === "object" &&
+    fontSource !== null &&
+    "source" in fontSource
+      ? fontSource.source
+      : fontSource;
+  const family =
+    typeof fontSource === "object" &&
+    fontSource !== null &&
+    "source" in fontSource
+      ? fontSource.family
+      : undefined;
+  const opened =
+    typeof source === "string"
+      ? fontkit.openSync(source, family)
+      : fontkit.create(
+          source instanceof ArrayBuffer
+            ? Buffer.from(source)
+            : Buffer.from(source),
+          family,
+        );
+  if (!("hasGlyphForCodePoint" in opened)) {
+    throw new PurchaseContractPdfFontError();
+  }
+  return opened;
+}
+
+export function purchaseContractPdfRenderedGlyphText(
+  model: PurchaseContractPdfViewModel,
+) {
+  const regular = [
+    PURCHASE_CONTRACT_PDF_REQUIRED_TEXT,
+    model.primaryTitle,
+    model.subtitle,
+    model.contractNo,
+    model.signingDate,
+    model.signingPlace ?? "",
+    ...Object.values(model.buyer),
+    ...Object.values(model.seller),
+    model.itemSectionTitle,
+    ...model.itemTableLabels,
+    ...model.items.flatMap((item) => Object.values(item)),
+    ...model.remarks.flatMap((line) => [line.marker ?? "", line.content]),
+    "总计人民币（大写）：",
+    model.totalAmountDisplay,
+    model.totalAmountUppercase,
+    ...model.terms.flatMap((term) => [
+      term.marker,
+      term.label,
+      term.value,
+      ...term.subLines,
+    ]),
+    ...purchaseContractPdfPartyRows("买方", model.buyer).flatMap((row) => [
+      row.label,
+      row.value,
+    ]),
+    ...purchaseContractPdfPartyRows("卖方", model.seller).flatMap((row) => [
+      row.label,
+      row.value,
+    ]),
+  ].join("\n");
+  const bold = model.specialNotice
+    ? `特别注意：\n${model.specialNotice}`
+    : "";
+  return { regular, bold };
+}
+
+function assertTextGlyphCoverage(font: fontkit.Font, text: string) {
+  for (const character of new Set(Array.from(text))) {
+    if (/^\s$/u.test(character)) {
+      continue;
+    }
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || !font.hasGlyphForCodePoint(codePoint)) {
+      throw new PurchaseContractPdfUnsupportedGlyphError();
+    }
+  }
+}
+
+export function assertPurchaseContractPdfDynamicGlyphCoverage(
+  model: PurchaseContractPdfViewModel,
+  fontSource: PurchaseContractPdfFontSource,
+  boldFontSource: PurchaseContractPdfFontSource,
+) {
+  let regularFont: fontkit.Font;
+  let boldFont: fontkit.Font;
+  try {
+    regularFont = glyphFont(fontSource);
+    boldFont = glyphFont(boldFontSource);
+  } catch (error) {
+    if (error instanceof PurchaseContractPdfFontError) {
+      throw error;
+    }
+    throw new PurchaseContractPdfFontError();
+  }
+  const text = purchaseContractPdfRenderedGlyphText(model);
+  assertTextGlyphCoverage(regularFont, text.regular);
+  assertTextGlyphCoverage(boldFont, text.bold);
 }
 
 function contentWidth(document: PDFKit.PDFDocument): number {
@@ -454,6 +580,33 @@ function renderRemarks(
 
 }
 
+function renderSpecialNotice(
+  document: PDFKit.PDFDocument,
+  model: PurchaseContractPdfViewModel,
+  fontSource: PurchaseContractPdfFontSource,
+) {
+  if (!model.specialNotice) {
+    return;
+  }
+
+  document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME).fontSize(BODY_FONT_SIZE);
+  const noticeText = `特别注意：\n${model.specialNotice}`;
+  const noticeHeight = document.heightOfString(noticeText, {
+    width: contentWidth(document),
+    lineGap: BODY_LINE_GAP,
+  });
+  const pageBreak = ensureSpace(document, noticeHeight + 3, fontSource);
+  if (pageBreak) {
+    document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME).fontSize(BODY_FONT_SIZE);
+  }
+  document.text(noticeText, CONTENT_MARGIN, document.y, {
+    width: contentWidth(document),
+    lineGap: BODY_LINE_GAP,
+  });
+  document.y += 3;
+  applyFont(document, fontSource);
+}
+
 function renderTotal(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
@@ -493,31 +646,33 @@ function renderTerms(
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
 ) {
-  const subLineIndent = 22;
+  const layout = purchaseContractPdfTermLayout();
   for (const term of model.terms) {
-    const applyTermFont = () =>
-      term.emphasized
-        ? document.font(PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME)
-        : applyFont(document, fontSource);
-    applyTermFont().fontSize(BODY_FONT_SIZE);
-    const mainText = `${term.heading}${term.value}`;
-    const mainHeight = document.heightOfString(mainText, {
-      width: contentWidth(document),
+    applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
+    const bodyText = `${term.label}：${term.value}`;
+    const mainHeight = document.heightOfString(bodyText, {
+      width: layout.bodyWidth,
       lineGap: BODY_LINE_GAP,
     });
     const pageBreak = ensureSpace(document, mainHeight, fontSource);
     if (pageBreak) {
-      applyTermFont().fontSize(BODY_FONT_SIZE);
+      applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
     }
-    document.text(mainText, CONTENT_MARGIN, document.y, {
-      width: contentWidth(document),
+    const mainY = document.y;
+    document.text(term.marker, layout.markerX, mainY, {
+      width: layout.markerWidth,
+      lineBreak: false,
+      lineGap: BODY_LINE_GAP,
+    });
+    document.text(bodyText, layout.bodyX, mainY, {
+      width: layout.bodyWidth,
       lineGap: BODY_LINE_GAP,
     });
 
     for (const subLine of term.subLines) {
-      applyTermFont().fontSize(BODY_FONT_SIZE);
+      applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
       const subLineHeight = document.heightOfString(subLine, {
-        width: contentWidth(document) - subLineIndent,
+        width: layout.subLineWidth,
         lineGap: BODY_LINE_GAP,
       });
       const subLinePageBreak = ensureSpace(
@@ -526,20 +681,17 @@ function renderTerms(
         fontSource,
       );
       if (subLinePageBreak) {
-        applyTermFont().fontSize(BODY_FONT_SIZE);
+        applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
       }
       document.text(
         subLine,
-        CONTENT_MARGIN + subLineIndent,
+        layout.subLineX,
         document.y,
         {
-          width: contentWidth(document) - subLineIndent,
+          width: layout.subLineWidth,
           lineGap: BODY_LINE_GAP,
         },
       );
-    }
-    if (term.emphasized) {
-      applyFont(document, fontSource);
     }
     document.y += 1;
   }
@@ -758,18 +910,24 @@ function renderDocument(
   renderHeader(document, model);
   renderItemsTable(document, model, fontSource);
   renderRemarks(document, model, fontSource);
+  renderSpecialNotice(document, model, fontSource);
   renderTotal(document, model, fontSource);
   renderTerms(document, model, fontSource);
   renderBottomPartyBlock(document, model, fontSource);
   renderFooters(document, fontSource);
 }
 
-export function renderPurchaseContractPdf(
+export async function renderPurchaseContractPdf(
   model: PurchaseContractPdfViewModel,
   fontSource: PurchaseContractPdfFontSource,
   boldFontSource: PurchaseContractPdfFontSource =
     PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
 ): Promise<Buffer> {
+  assertPurchaseContractPdfDynamicGlyphCoverage(
+    model,
+    fontSource,
+    boldFontSource,
+  );
   return new Promise((resolve, reject) => {
     const document = new PDFDocument({
       size: [PAGE_WIDTH, PAGE_HEIGHT],

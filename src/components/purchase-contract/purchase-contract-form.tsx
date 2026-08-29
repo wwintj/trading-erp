@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   INITIAL_PURCHASE_CONTRACT_FORM_STATE,
   PURCHASE_CONTRACT_FIELD_LIMITS,
+  PURCHASE_CONTRACT_SAVE_INTENTS,
   calculateExactContractItemAmount,
   calculateExactContractTotal,
   type PurchaseContractInput,
@@ -44,6 +45,15 @@ export type ContractFormValues = Omit<PurchaseContractInput, "items"> & {
 };
 
 type FormRow = ContractFormItem & { key: number };
+
+export const PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION =
+  "将使用当前供应商主档覆盖本草稿中的卖方名称、地址、电话、联系人及银行资料。合同其它内容不会改变。是否继续？";
+
+export function confirmPurchaseContractSupplierRefresh(
+  confirm: (message: string) => boolean,
+) {
+  return confirm(PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION);
+}
 
 export function PurchaseContractForm({
   contractId,
@@ -159,18 +169,42 @@ export function PurchaseContractForm({
           </NativeSelect>
         </FormField>
         <FormField label="卖方" error={state.fieldErrors?.supplierId}>
-          <NativeSelect
-            name="supplierId"
-            defaultValue={initialValues.supplierId}
-            disabled={pending}
-          >
-            <option value="">请选择卖方</option>
-            {suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.code} — {supplier.legalName}
-              </option>
-            ))}
-          </NativeSelect>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <NativeSelect
+                name="supplierId"
+                defaultValue={initialValues.supplierId}
+                disabled={pending}
+              >
+                <option value="">请选择卖方</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.code} — {supplier.legalName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            {contractId ? (
+              <Button
+                type="submit"
+                name="intent"
+                value={PURCHASE_CONTRACT_SAVE_INTENTS.refreshSupplierSnapshot}
+                variant="outline"
+                disabled={pending}
+                onClick={(event) => {
+                  if (
+                    !confirmPurchaseContractSupplierRefresh((message) =>
+                      window.confirm(message),
+                    )
+                  ) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                更新供应商资料
+              </Button>
+            ) : null}
+          </div>
         </FormField>
       </FormSection>
 
@@ -325,7 +359,12 @@ export function PurchaseContractForm({
         <Button variant="outline" asChild>
           <Link href="/purchase-contracts">取消</Link>
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button
+          type="submit"
+          name="intent"
+          value={PURCHASE_CONTRACT_SAVE_INTENTS.save}
+          disabled={pending}
+        >
           {pending
             ? contractId
               ? "正在保存…"

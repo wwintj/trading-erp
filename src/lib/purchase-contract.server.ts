@@ -87,10 +87,15 @@ type ExistingPurchaseContract = NonNullable<
   Awaited<ReturnType<typeof findPurchaseContractForUpdate>>
 >;
 
+export type PurchaseContractUpdateOptions = {
+  refreshSellerSnapshot?: boolean;
+};
+
 async function prepareContractData(
   transaction: Prisma.TransactionClient,
   input: PurchaseContractInput,
   existing?: ExistingPurchaseContract,
+  options: PurchaseContractUpdateOptions = {},
 ) {
   const productIds = [...new Set(input.items.map((item) => item.productId))];
   const [company, supplier, products] = await Promise.all([
@@ -174,7 +179,9 @@ async function prepareContractData(
   });
 
   const preserveBuyerSnapshot = existing?.companyId === input.companyId;
-  const preserveSellerSnapshot = existing?.supplierId === input.supplierId;
+  const preserveSellerSnapshot =
+    existing?.supplierId === input.supplierId &&
+    !options.refreshSellerSnapshot;
   const buyerSnapshot =
     preserveBuyerSnapshot && existing
       ? {
@@ -260,6 +267,7 @@ export function createPurchaseContract(input: PurchaseContractInput) {
 export function updatePurchaseContract(
   id: string,
   input: PurchaseContractInput,
+  options: PurchaseContractUpdateOptions = {},
 ) {
   return db.$transaction(
     async (transaction) => {
@@ -271,7 +279,12 @@ export function updatePurchaseContract(
         throw new PurchaseContractImmutableError();
       }
 
-      const data = await prepareContractData(transaction, input, existing);
+      const data = await prepareContractData(
+        transaction,
+        input,
+        existing,
+        options,
+      );
       await transaction.purchaseContractItem.deleteMany({
         where: { purchaseContractId: id },
       });

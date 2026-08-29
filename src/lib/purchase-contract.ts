@@ -10,6 +10,11 @@ export const PURCHASE_CONTRACT_IMMUTABLE_MESSAGE =
 export const PURCHASE_CONTRACT_VALIDATION_MESSAGE =
   "请检查并修正标记的字段。";
 
+export const PURCHASE_CONTRACT_SAVE_INTENTS = {
+  save: "save",
+  refreshSupplierSnapshot: "refreshSupplierSnapshot",
+} as const;
+
 export const PURCHASE_CONTRACT_FIELD_LIMITS = {
   contractNo: 64,
   signingPlace: 255,

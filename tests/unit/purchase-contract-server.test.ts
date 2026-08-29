@@ -155,7 +155,15 @@ describe("Purchase Contract persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     company.legalName = "天津纬信科技有限公司";
-    supplier.legalName = "惠州市华业升塑胶制品有限公司";
+    Object.assign(supplier, {
+      legalName: "惠州市华业升塑胶制品有限公司",
+      unifiedCreditCode: "seller-credit",
+      contactName: "Seller Contact",
+      phone: "seller-phone",
+      address: "seller-address",
+      bankName: "seller-bank",
+      bankAccount: "seller-account",
+    });
     product.name = "PVC热收缩套管";
     mocks.runTransaction.mockImplementation(
       async (operation: (tx: typeof mocks.transaction) => unknown) =>
@@ -292,6 +300,83 @@ describe("Purchase Contract persistence", () => {
     expect(mocks.transaction.supplier.findUnique).toHaveBeenCalledWith({
       where: { id: "supplier-1" },
     });
+  });
+
+  it("explicitly refreshes the same Supplier snapshot and saves current form edits", async () => {
+    Object.assign(supplier, {
+      legalName: "供应商最新名称",
+      unifiedCreditCode: "new-seller-credit",
+      contactName: "最新联系人",
+      phone: "new-seller-phone",
+      address: "最新供应商地址",
+      bankName: "最新开户行",
+      bankAccount: "new-seller-account",
+    });
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({
+        paymentTerms: "当前未保存的付款条款",
+        deliveryAddress: "当前未保存的收货地址",
+      }),
+      { refreshSellerSnapshot: true },
+    );
+
+    const updateData =
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data;
+    expect(updateData).toMatchObject({
+      sellerLegalName: "供应商最新名称",
+      sellerUnifiedCreditCode: "new-seller-credit",
+      sellerContactName: "最新联系人",
+      sellerPhone: "new-seller-phone",
+      sellerAddress: "最新供应商地址",
+      sellerBankName: "最新开户行",
+      sellerBankAccount: "new-seller-account",
+      supplierId: "supplier-1",
+      buyerLegalName: "旧买方名称",
+      paymentTerms: "当前未保存的付款条款",
+      deliveryAddress: "当前未保存的收货地址",
+    });
+    expect(updateData.items.create[0]).toMatchObject({
+      productName: "PVC热收缩套管",
+    });
+    expect(updateData.items.create[0].quantity.toFixed(3)).toBe("6400.000");
+  });
+
+  it.each(["FINAL", "CANCELLED"])(
+    "rejects explicit Supplier refresh while status is %s",
+    async (status) => {
+      mocks.transaction.purchaseContract.findUnique.mockResolvedValue({
+        ...existingDraftContract(),
+        status,
+      });
+
+      await expect(
+        updatePurchaseContract(
+          "contract-1",
+          draftUpdateInput(),
+          { refreshSellerSnapshot: true },
+        ),
+      ).rejects.toBeInstanceOf(PurchaseContractImmutableError);
+      expect(mocks.transaction.purchaseContract.update).not.toHaveBeenCalled();
+      expect(mocks.transaction.purchaseContractItem.deleteMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it("fails safely when the selected Supplier no longer exists during refresh", async () => {
+    mocks.transaction.supplier.findUnique.mockResolvedValue(null);
+
+    await expect(
+      updatePurchaseContract(
+        "contract-1",
+        draftUpdateInput(),
+        { refreshSellerSnapshot: true },
+      ),
+    ).rejects.toMatchObject({
+      fieldErrors: { supplierId: "请选择有效的卖方。" },
+    } satisfies Partial<PurchaseContractValidationError>);
+    expect(mocks.transaction.purchaseContract.update).not.toHaveBeenCalled();
+    expect(mocks.transaction.purchaseContractItem.deleteMany).not.toHaveBeenCalled();
   });
 
   it("preserves an existing item snapshot when productId is unchanged", async () => {

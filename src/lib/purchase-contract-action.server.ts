@@ -7,6 +7,7 @@ import {
   type PurchaseContractFormState,
   PURCHASE_CONTRACT_GENERIC_ERROR_MESSAGE,
   PURCHASE_CONTRACT_IMMUTABLE_MESSAGE,
+  PURCHASE_CONTRACT_SAVE_INTENTS,
   PURCHASE_CONTRACT_SIGN_IN_MESSAGE,
   PURCHASE_CONTRACT_VALIDATION_MESSAGE,
   isPurchaseContractUniqueConstraintError,
@@ -65,14 +66,32 @@ export async function executePurchaseContractSave(
     typeof rawContractId === "string" && rawContractId.trim()
       ? rawContractId.trim()
       : null;
+  const refreshSupplierSnapshot =
+    formData.get("intent") ===
+    PURCHASE_CONTRACT_SAVE_INTENTS.refreshSupplierSnapshot;
+
+  if (refreshSupplierSnapshot && !contractId) {
+    return {
+      status: "error",
+      message: PURCHASE_CONTRACT_VALIDATION_MESSAGE,
+    };
+  }
 
   try {
     const contract = contractId
-      ? await dependencies.update(contractId, validation.input)
+      ? refreshSupplierSnapshot
+        ? await dependencies.update(contractId, validation.input, {
+            refreshSellerSnapshot: true,
+          })
+        : await dependencies.update(contractId, validation.input)
       : await dependencies.create(validation.input);
     return {
       status: "success",
-      message: contractId ? "采购合同保存成功。" : "采购合同创建成功。",
+      message: refreshSupplierSnapshot
+        ? "供应商资料已更新，并已保存当前草稿。"
+        : contractId
+          ? "采购合同保存成功。"
+          : "采购合同创建成功。",
       contractId: contract.id,
     };
   } catch (error) {

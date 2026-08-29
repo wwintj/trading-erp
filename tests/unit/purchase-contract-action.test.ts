@@ -76,6 +76,70 @@ describe("Purchase Contract save action", () => {
     expect(update).toHaveBeenCalledWith("contract-1", expect.any(Object));
   });
 
+  it("submits an explicit Supplier refresh intent with distinct success feedback", async () => {
+    const form = validForm("contract-1");
+    form.set("paymentTerms", "当前完整表单内容");
+    form.set("intent", "refreshSupplierSnapshot");
+    const update = vi.fn().mockResolvedValue({ id: "contract-1", status: "DRAFT" });
+
+    const result = await executePurchaseContractSave(
+      INITIAL_PURCHASE_CONTRACT_FORM_STATE,
+      form,
+      {
+        getSession: vi.fn().mockResolvedValue(adminSession),
+        create: vi.fn(),
+        update,
+      },
+    );
+
+    expect(result).toEqual({
+      status: "success",
+      message: "供应商资料已更新，并已保存当前草稿。",
+      contractId: "contract-1",
+    });
+    expect(update).toHaveBeenCalledWith(
+      "contract-1",
+      expect.objectContaining({ paymentTerms: "当前完整表单内容" }),
+      { refreshSellerSnapshot: true },
+    );
+  });
+
+  it.each([null, { user: { role: "user" } }])(
+    "rejects unauthorized explicit Supplier refresh mutations",
+    async (session) => {
+      const form = validForm("contract-1");
+      form.set("intent", "refreshSupplierSnapshot");
+      const update = vi.fn();
+
+      const result = await executePurchaseContractSave(
+        INITIAL_PURCHASE_CONTRACT_FORM_STATE,
+        form,
+        { getSession: vi.fn().mockResolvedValue(session), create: vi.fn(), update },
+      );
+
+      expect(result.status).toBe("error");
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a refresh intent without an existing contract", async () => {
+    const form = validForm();
+    form.set("intent", "refreshSupplierSnapshot");
+    const create = vi.fn();
+
+    const result = await executePurchaseContractSave(
+      INITIAL_PURCHASE_CONTRACT_FORM_STATE,
+      form,
+      { getSession: vi.fn().mockResolvedValue(adminSession), create, update: vi.fn() },
+    );
+
+    expect(result).toMatchObject({
+      status: "error",
+      message: "请检查并修正标记的字段。",
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("maps duplicate, immutable, and internal errors safely", async () => {
     const base = { getSession: vi.fn().mockResolvedValue(adminSession), update: vi.fn() };
     const duplicate = await executePurchaseContractSave(

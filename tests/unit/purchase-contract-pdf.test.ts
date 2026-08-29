@@ -26,6 +26,7 @@ import {
   PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
   PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+  PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH,
   PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP,
   PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING,
@@ -41,6 +42,8 @@ import {
   PurchaseContractPdfUnsupportedGlyphError,
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
+  purchaseContractPdfDeliveryLabelCharacterSpacing,
+  purchaseContractPdfDeliveryRowLayout,
   purchaseContractPdfPartyColumnLayout,
   purchaseContractPdfPartyLabelCharacterSpacing,
   purchaseContractPdfPartyRows,
@@ -180,9 +183,10 @@ describe("Purchase Contract PDF historical view model", () => {
       heading: "四、交货时间：",
       label: "交货时间",
       value: "2026年09月01日",
-      subLines: [
-        "发货地址：浙江省乐清市历史收货地址",
-        "收货人：张建英    电话：13800000000",
+      deliveryRows: [
+        { label: "发货地址", value: "浙江省乐清市历史收货地址" },
+        { label: "收货人", value: "张建英" },
+        { label: "电话", value: "13800000000" },
       ],
       emphasized: false,
     });
@@ -211,7 +215,7 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model.terms.find((term) => term.label === "合同变更")).toMatchObject({
       value: "合同变更须书面确认",
       emphasized: false,
-      subLines: [],
+      deliveryRows: [],
     });
   });
 
@@ -225,7 +229,7 @@ describe("Purchase Contract PDF historical view model", () => {
       expected: {
         label: "交货时间",
         value: "2026年09月01日",
-        subLines: [],
+        deliveryRows: [],
       },
     },
     {
@@ -237,7 +241,12 @@ describe("Purchase Contract PDF historical view model", () => {
       expected: {
         label: "交货信息",
         value: "",
-        subLines: ["发货地址：浙江省乐清市翁垟街道高桥村龙栖路142号"],
+        deliveryRows: [
+          {
+            label: "发货地址",
+            value: "浙江省乐清市翁垟街道高桥村龙栖路142号",
+          },
+        ],
       },
     },
     {
@@ -249,7 +258,7 @@ describe("Purchase Contract PDF historical view model", () => {
       expected: {
         label: "交货信息",
         value: "",
-        subLines: ["收货人：张建英"],
+        deliveryRows: [{ label: "收货人", value: "张建英" }],
       },
     },
     {
@@ -261,7 +270,7 @@ describe("Purchase Contract PDF historical view model", () => {
       expected: {
         label: "交货信息",
         value: "",
-        subLines: ["电话：13587623210"],
+        deliveryRows: [{ label: "电话", value: "13587623210" }],
       },
     },
   ])("builds a delivery term for $label", ({ date, address, recipient, phone, expected }) => {
@@ -312,7 +321,7 @@ describe("Purchase Contract PDF historical view model", () => {
       value:
         "本合同数量允许根据实际生产情况上下浮动5%。\n所有变更须双方书面确认。",
       emphasized: false,
-      subLines: [],
+      deliveryRows: [],
     });
   });
 
@@ -361,6 +370,50 @@ describe("Purchase Contract PDF historical view model", () => {
       subLineWidth: 479.22,
     });
     expect(layout.subLineX).toBeGreaterThan(layout.bodyX);
+  });
+
+  it("uses measured distributed delivery labels with fixed colon and value columns", () => {
+    const measureText = (text: string) => Array.from(text).length * 10;
+    const layout = purchaseContractPdfDeliveryRowLayout(measureText);
+
+    expect(PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH).toBe(56);
+    expect(layout).toEqual({
+      labelTextX: 80,
+      targetLabelTextWidth: 40,
+      colonX: 120,
+      colonWidth: 16,
+      labelWidth: 56,
+      valueX: 136,
+      valueWidth: 423.22,
+    });
+    expect(
+      purchaseContractPdfDeliveryLabelCharacterSpacing(
+        "发货地址",
+        layout.targetLabelTextWidth,
+        measureText,
+      ),
+    ).toBe(0);
+    expect(
+      purchaseContractPdfDeliveryLabelCharacterSpacing(
+        "收货人",
+        layout.targetLabelTextWidth,
+        measureText,
+      ),
+    ).toBe(5);
+    expect(
+      purchaseContractPdfDeliveryLabelCharacterSpacing(
+        "电话",
+        layout.targetLabelTextWidth,
+        measureText,
+      ),
+    ).toBe(20);
+    expect(
+      purchaseContractPdfDeliveryLabelCharacterSpacing(
+        "发货地址",
+        30,
+        measureText,
+      ),
+    ).toBe(0);
   });
 
   it("builds structured markers through ten without parsing headings", () => {
@@ -797,11 +850,14 @@ describe("Purchase Contract PDF bundled fonts", () => {
     }
   });
 
-  it("draws numbered terms and delivery sublines in separate hanging-indent boxes", async () => {
+  it("draws numbered terms and structured delivery rows in aligned boxes", async () => {
     const textSpy = vi.spyOn(PDFDocument.prototype, "text");
     try {
+      const source = contractFixture();
+      source.deliveryAddress =
+        "浙江省乐清市翁垟街道高桥村龙栖路142号收货仓库，请在到货前联系收货人确认卸货位置。";
       await renderPurchaseContractPdf(
-        buildPurchaseContractPdfViewModel(contractFixture()),
+        buildPurchaseContractPdfViewModel(source),
         PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
       );
       const layout = purchaseContractPdfTermLayout();
@@ -814,9 +870,29 @@ describe("Purchase Contract PDF bundled fonts", () => {
         ([text]) =>
           typeof text === "string" && text.startsWith("交货时间：2026年"),
       );
-      const deliverySubLineCall = textSpy.mock.calls.find(
-        ([text]) =>
-          typeof text === "string" && text.startsWith("发货地址："),
+      const deliveryLayout = purchaseContractPdfDeliveryRowLayout(
+        (text) => text.length * 10,
+      );
+      const addressValueCall = textSpy.mock.calls.find(
+        ([text]) => text === source.deliveryAddress,
+      );
+      const recipientValueCall = textSpy.mock.calls.find(
+        ([text]) => text === "张建英",
+      );
+      const phoneValueCall = textSpy.mock.calls.find(
+        ([text]) => text === "13800000000",
+      );
+      const labelFirstCharacterCalls = ["发", "收", "电"].map((character) =>
+        textSpy.mock.calls.find(
+          ([text, x]) => text === character && x === deliveryLayout.labelTextX,
+        ),
+      );
+      const deliveryColonCalls = textSpy.mock.calls.filter(
+        ([text, x]) =>
+          text === "：" &&
+          typeof x === "number" &&
+          x > deliveryLayout.labelTextX &&
+          x < deliveryLayout.valueX,
       );
 
       expect(markerCall?.[1]).toBe(layout.markerX);
@@ -824,10 +900,13 @@ describe("Purchase Contract PDF bundled fonts", () => {
       expect(bodyCall?.[1]).toBe(layout.bodyX);
       expect(bodyCall?.[3]).toMatchObject({ width: layout.bodyWidth });
       expect(deliveryCall?.[1]).toBe(layout.bodyX);
-      expect(deliverySubLineCall?.[1]).toBe(layout.subLineX);
-      expect(deliverySubLineCall?.[3]).toMatchObject({
-        width: layout.subLineWidth,
-      });
+      expect(labelFirstCharacterCalls.every(Boolean)).toBe(true);
+      expect(deliveryColonCalls).toHaveLength(3);
+      expect(new Set(deliveryColonCalls.map((call) => call[1])).size).toBe(1);
+      for (const call of [addressValueCall, recipientValueCall, phoneValueCall]) {
+        expect(call?.[1]).toBe(deliveryLayout.valueX);
+        expect(call?.[3]).toMatchObject({ width: deliveryLayout.valueWidth });
+      }
     } finally {
       textSpy.mockRestore();
     }

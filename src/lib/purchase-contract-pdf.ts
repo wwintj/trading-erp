@@ -81,6 +81,11 @@ export type PurchaseContractPdfRemarkLine = {
   content: string;
 };
 
+export type PurchaseContractPdfDeliveryRow = {
+  label: "发货地址" | "收货人" | "电话";
+  value: string;
+};
+
 export type PurchaseContractPdfViewModel = {
   primaryTitle: string;
   subtitle: "采购合同";
@@ -113,7 +118,7 @@ export type PurchaseContractPdfViewModel = {
     heading: string;
     label: string;
     value: string;
-    subLines: string[];
+    deliveryRows: PurchaseContractPdfDeliveryRow[];
     emphasized: boolean;
   }>;
 };
@@ -387,25 +392,21 @@ export function buildPurchaseContractPdfViewModel(
   const deliveryAddress = optionalText(source.deliveryAddress);
   const deliveryContactName = optionalText(source.deliveryContactName);
   const deliveryContactPhone = optionalText(source.deliveryContactPhone);
-  const deliverySubLines: string[] = [];
+  const deliveryRows: PurchaseContractPdfDeliveryRow[] = [];
   if (deliveryAddress) {
-    deliverySubLines.push(`发货地址：${deliveryAddress}`);
+    deliveryRows.push({ label: "发货地址", value: deliveryAddress });
   }
-  if (deliveryContactName || deliveryContactPhone) {
-    deliverySubLines.push(
-      [
-        deliveryContactName ? `收货人：${deliveryContactName}` : null,
-        deliveryContactPhone ? `电话：${deliveryContactPhone}` : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join("    "),
-    );
+  if (deliveryContactName) {
+    deliveryRows.push({ label: "收货人", value: deliveryContactName });
+  }
+  if (deliveryContactPhone) {
+    deliveryRows.push({ label: "电话", value: deliveryContactPhone });
   }
 
   type StoredTerm = {
     label: string;
     value: string;
-    subLines?: string[];
+    deliveryRows?: PurchaseContractPdfDeliveryRow[];
     emphasized?: boolean;
   };
   const optionalTerm = (
@@ -415,11 +416,11 @@ export function buildPurchaseContractPdfViewModel(
   ): StoredTerm | null =>
     value ? { label, value, emphasized } : null;
   const deliveryTerm: StoredTerm | null =
-    deliveryDate || deliverySubLines.length > 0
+    deliveryDate || deliveryRows.length > 0
       ? {
           label: deliveryDate ? "交货时间" : "交货信息",
           value: deliveryDate ?? "",
-          subLines: deliverySubLines,
+          deliveryRows,
         }
       : null;
   const storedTerms: Array<StoredTerm | null> = [
@@ -443,7 +444,7 @@ export function buildPurchaseContractPdfViewModel(
         heading: `${CHINESE_SECTION_NUMBERS[sectionNumber]}、${term.label}：`,
         label: term.label,
         value: term.value,
-        subLines: term.subLines ?? [],
+        deliveryRows: term.deliveryRows ?? [],
         emphasized: term.emphasized ?? false,
       };
     });

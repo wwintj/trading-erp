@@ -44,6 +44,10 @@ import PurchaseContractPage from "@/app/purchase-contracts/[id]/page";
 import NewPurchaseContractPage from "@/app/purchase-contracts/new/page";
 import PurchaseContractsPage from "@/app/purchase-contracts/page";
 import {
+  PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION,
+  confirmPurchaseContractSupplierRefresh,
+} from "@/components/purchase-contract/purchase-contract-form";
+import {
   PURCHASE_CONTRACT_STATUS_CONFIRMATIONS,
   requestPurchaseContractStatusChange,
 } from "@/components/purchase-contract/purchase-contract-status-actions";
@@ -228,6 +232,9 @@ describe("Purchase Contract pages", () => {
     expect(html).toContain("← 返回采购合同列表");
     expect(html).toContain(">取消</a>");
     expect(createButton).toContain("bg-[#16A34A]");
+    expect(html).not.toContain("更新供应商资料");
+    expect(createButton).toContain('name="intent"');
+    expect(createButton).toContain('value="save"');
   });
 
   it("renders Draft editable for admin and read-only for user", async () => {
@@ -238,6 +245,8 @@ describe("Purchase Contract pages", () => {
       await PurchaseContractPage({ params: Promise.resolve({ id: "contract-1" }) }),
     );
     expect(adminHtml).toContain("保存采购合同");
+    expect(adminHtml).toContain("更新供应商资料");
+    expect(adminHtml).toContain('value="refreshSupplierSnapshot"');
     expect(adminHtml).toContain("定稿采购合同");
     expect(adminHtml).toContain("取消采购合同");
     expect(adminHtml).not.toContain("重新打开为草稿");
@@ -252,6 +261,7 @@ describe("Purchase Contract pages", () => {
     expect(userHtml).toContain("5760.00");
     expect(userHtml).not.toContain("保存采购合同");
     expect(userHtml).not.toContain("定稿采购合同");
+    expect(userHtml).not.toContain("更新供应商资料");
   });
 
   it("renders Final and Cancelled contracts read-only", async () => {
@@ -263,6 +273,7 @@ describe("Purchase Contract pages", () => {
     );
     expect(finalHtml).toContain("已定稿");
     expect(finalHtml).not.toContain("保存采购合同");
+    expect(finalHtml).not.toContain("更新供应商资料");
     expect(finalHtml).toContain("重新打开为草稿");
     expect(finalHtml).toContain("取消采购合同");
     expect(finalHtml).toContain(
@@ -277,6 +288,7 @@ describe("Purchase Contract pages", () => {
     );
     expect(cancelledHtml).toContain("已取消");
     expect(cancelledHtml).not.toContain("保存采购合同");
+    expect(cancelledHtml).not.toContain("更新供应商资料");
     expect(cancelledHtml).not.toContain("重新打开为草稿");
     expect(cancelledHtml).not.toContain("取消采购合同");
     expect(cancelledHtml).not.toContain("导出 PDF");
@@ -319,6 +331,18 @@ describe("Purchase Contract pages", () => {
     expect(finalize).not.toHaveBeenCalled();
     expect(reopen).not.toHaveBeenCalled();
     expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit Chinese Supplier refresh confirmation", () => {
+    const confirm = vi.fn().mockReturnValue(false);
+
+    expect(confirmPurchaseContractSupplierRefresh(confirm)).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(
+      "将使用当前供应商主档覆盖本草稿中的卖方名称、地址、电话、联系人及银行资料。合同其它内容不会改变。是否继续？",
+    );
+    expect(PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION).toBe(
+      "将使用当前供应商主档覆盖本草稿中的卖方名称、地址、电话、联系人及银行资料。合同其它内容不会改变。是否继续？",
+    );
   });
 
   it("uses normal not-found behavior for a missing contract", async () => {

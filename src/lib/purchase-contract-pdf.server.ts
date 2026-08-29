@@ -9,6 +9,7 @@ import PDFDocument from "pdfkit";
 
 import {
   purchaseContractPdfPageFooters,
+  type PurchaseContractPdfDeliveryRow,
   type PurchaseContractPdfParty,
   type PurchaseContractPdfRemarkLine,
   type PurchaseContractPdfViewModel,
@@ -40,6 +41,7 @@ export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
   "PurchaseContractBoldFont";
 export const PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH = 22;
 export const PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT = 22;
+export const PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH = 56;
 
 export class PurchaseContractPdfFontError extends Error {
   constructor() {
@@ -227,7 +229,7 @@ export function purchaseContractPdfRenderedGlyphText(
       term.marker,
       term.label,
       term.value,
-      ...term.subLines,
+      ...term.deliveryRows.flatMap((row) => [row.label, row.value]),
     ]),
     ...purchaseContractPdfPartyRows("买方", model.buyer).flatMap((row) => [
       row.label,
@@ -641,6 +643,76 @@ function renderTotal(
   document.y += 4;
 }
 
+export function purchaseContractPdfDeliveryRowLayout(
+  measureText: (text: string) => number,
+) {
+  const labelTextX = purchaseContractPdfTermLayout().subLineX;
+  const targetLabelTextWidth = Math.max(
+    ...["发货地址", "收货人", "电话"].map(measureText),
+  );
+  const valueX = labelTextX + PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH;
+  const colonX = labelTextX + targetLabelTextWidth;
+  return {
+    labelTextX,
+    targetLabelTextWidth,
+    colonX,
+    colonWidth: valueX - colonX,
+    labelWidth: PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH,
+    valueX,
+    valueWidth: PAGE_WIDTH - CONTENT_MARGIN - valueX,
+  };
+}
+
+export function purchaseContractPdfDeliveryLabelCharacterSpacing(
+  label: PurchaseContractPdfDeliveryRow["label"],
+  targetLabelTextWidth: number,
+  measureText: (text: string) => number,
+) {
+  return purchaseContractPdfPartyLabelCharacterSpacing(
+    label,
+    targetLabelTextWidth,
+    measureText,
+  );
+}
+
+function renderDeliveryRows(
+  document: PDFKit.PDFDocument,
+  rows: PurchaseContractPdfDeliveryRow[],
+  fontSource: PurchaseContractPdfFontSource,
+) {
+  const measureText = (text: string) => document.widthOfString(text);
+  const layout = purchaseContractPdfDeliveryRowLayout(measureText);
+  for (const row of rows) {
+    applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
+    const rowHeight = Math.max(
+      16,
+      document.heightOfString(row.value, {
+        width: layout.valueWidth,
+        lineGap: BODY_LINE_GAP,
+      }),
+    );
+    ensureSpace(document, rowHeight, fontSource);
+    const y = document.y;
+    renderDistributedLabel(
+      document,
+      row.label,
+      layout.labelTextX,
+      layout.targetLabelTextWidth,
+      y,
+      measureText,
+    );
+    document.text("：", layout.colonX, y, {
+      width: layout.colonWidth,
+      lineBreak: false,
+    });
+    document.text(row.value, layout.valueX, y, {
+      width: layout.valueWidth,
+      lineGap: BODY_LINE_GAP,
+    });
+    document.y = y + rowHeight;
+  }
+}
+
 function renderTerms(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
@@ -669,30 +741,7 @@ function renderTerms(
       lineGap: BODY_LINE_GAP,
     });
 
-    for (const subLine of term.subLines) {
-      applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
-      const subLineHeight = document.heightOfString(subLine, {
-        width: layout.subLineWidth,
-        lineGap: BODY_LINE_GAP,
-      });
-      const subLinePageBreak = ensureSpace(
-        document,
-        subLineHeight,
-        fontSource,
-      );
-      if (subLinePageBreak) {
-        applyFont(document, fontSource).fontSize(BODY_FONT_SIZE);
-      }
-      document.text(
-        subLine,
-        layout.subLineX,
-        document.y,
-        {
-          width: layout.subLineWidth,
-          lineGap: BODY_LINE_GAP,
-        },
-      );
-    }
+    renderDeliveryRows(document, term.deliveryRows, fontSource);
     document.y += 1;
   }
 }
@@ -747,7 +796,7 @@ export function purchaseContractPdfPartyLabelCharacterSpacing(
   return Math.max(0, availableSpacing / (characters.length - 1));
 }
 
-function renderDistributedPartyLabel(
+function renderDistributedLabel(
   document: PDFKit.PDFDocument,
   label: string,
   startX: number,
@@ -836,7 +885,7 @@ function renderBottomPartyBlock(
   buyerRows.forEach((buyerRow, index) => {
     const sellerRow = sellerRows[index];
     document.fontSize(BODY_FONT_SIZE);
-    renderDistributedPartyLabel(
+    renderDistributedLabel(
       document,
       buyerRow.label,
       buyerLayout.labelTextX,
@@ -853,7 +902,7 @@ function renderBottomPartyBlock(
       align: buyerLayout.valueAlign,
       lineGap: 2,
     });
-    renderDistributedPartyLabel(
+    renderDistributedLabel(
       document,
       sellerRow.label,
       sellerLayout.labelTextX,

@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
 
+import * as fontkit from "fontkit";
 import PDFDocument from "pdfkit";
 
 import {
@@ -23,14 +24,17 @@ export const PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH = path.join(
   process.cwd(),
   "assets",
   "fonts",
-  "FandolHei-Bold.otf",
+  "NotoSansCJKsc-Bold.otf",
 );
+export const PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT =
+  "特别注意此次订单发货地址如下收件人浙江省乐清市翁垟街道高桥村龙栖路142号";
 
 export const PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN = "right" as const;
-export const PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN = "left" as const;
 export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN = "left" as const;
 export const PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN = "left" as const;
-export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH = 62;
+export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP = 8;
+export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING = 2;
 export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH = 46;
 export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
   "PurchaseContractBoldFont";
@@ -47,6 +51,21 @@ export type PurchaseContractPdfFontSource =
   | FontSource
   | { source: FontSource; family?: string };
 type AssertReadable = (fontPath: string) => Promise<void>;
+type AssertBoldGlyphCoverage = (fontPath: string) => Promise<void> | void;
+
+function assertBundledBoldGlyphCoverage(fontPath: string) {
+  const opened = fontkit.openSync(fontPath);
+  if (!("hasGlyphForCodePoint" in opened)) {
+    throw new Error("Expected a single OpenType font");
+  }
+
+  for (const character of new Set(PURCHASE_CONTRACT_PDF_BOLD_REQUIRED_TEXT)) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || !opened.hasGlyphForCodePoint(codePoint)) {
+      throw new Error("Required PDF emphasis glyph is unavailable");
+    }
+  }
+}
 
 export async function resolvePurchaseContractPdfFontPath(
   source: EnvironmentSource = process.env,
@@ -57,6 +76,8 @@ export async function resolvePurchaseContractPdfFontPath(
     }
     await access(fontPath, constants.R_OK);
   },
+  assertBoldGlyphCoverage: AssertBoldGlyphCoverage =
+    assertBundledBoldGlyphCoverage,
 ): Promise<string> {
   const configured = source.PURCHASE_CONTRACT_PDF_FONT_PATH?.trim();
   const fontPath = configured || PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH;
@@ -64,6 +85,7 @@ export async function resolvePurchaseContractPdfFontPath(
   try {
     await assertReadable(fontPath);
     await assertReadable(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
+    await assertBoldGlyphCoverage(PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH);
     return fontPath;
   } catch {
     throw new PurchaseContractPdfFontError();
@@ -162,20 +184,31 @@ function horizontalRule(
     .stroke();
 }
 
-export function purchaseContractPdfHeaderMetadataLayout() {
-  const gap = 18;
-  const width = 178;
-  const printableWidth = PAGE_WIDTH - CONTENT_MARGIN * 2;
-  const leftWidth = printableWidth - width - gap;
-  const labelX = CONTENT_MARGIN + leftWidth + gap;
+export function purchaseContractPdfHeaderMetadataLayout(
+  rows: ReturnType<typeof purchaseContractPdfHeaderMetadataRows>,
+  measureText: (text: string) => number,
+) {
+  const labelWidth =
+    Math.max(...rows.map((row) => measureText(row.label))) +
+    PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING;
+  const valueWidth =
+    Math.max(...rows.map((row) => measureText(row.value))) +
+    PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING;
+  const rightEdge = PAGE_WIDTH - CONTENT_MARGIN;
+  const blockWidth =
+    labelWidth + PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP + valueWidth;
+  const labelX = rightEdge - blockWidth;
   return {
     labelX,
-    labelWidth: PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+    labelWidth,
     labelAlign: PURCHASE_CONTRACT_PDF_HEADER_LABEL_ALIGN,
-    valueX: labelX + PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
-    valueWidth: width - PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+    valueX:
+      labelX + labelWidth + PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP,
+    valueWidth,
     valueAlign: PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN,
-    rightEdge: PAGE_WIDTH - CONTENT_MARGIN,
+    columnGap: PURCHASE_CONTRACT_PDF_HEADER_METADATA_COLUMN_GAP,
+    blockWidth,
+    rightEdge,
   };
 }
 
@@ -212,14 +245,15 @@ function renderHeader(
 
   const y = document.y;
   const gap = 18;
-  const metadataLayout = purchaseContractPdfHeaderMetadataLayout();
-  const rightWidth =
-    metadataLayout.labelWidth + metadataLayout.valueWidth;
-  const leftWidth = contentWidth(document) - rightWidth - gap;
   const leftText = `买方：${model.buyer.legalName}\n卖方：${model.seller.legalName}`;
   const metadataRows = purchaseContractPdfHeaderMetadataRows(model);
 
   document.fontSize(BODY_FONT_SIZE);
+  const metadataLayout = purchaseContractPdfHeaderMetadataLayout(
+    metadataRows,
+    (text) => document.widthOfString(text),
+  );
+  const leftWidth = contentWidth(document) - metadataLayout.blockWidth - gap;
   const metadataRowHeights = metadataRows.map((row) =>
     Math.max(
       document.heightOfString(row.label, {

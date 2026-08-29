@@ -25,11 +25,14 @@ import {
   PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME,
   PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH,
   PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
-  PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN,
+  PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
+  PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
+  PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
   PURCHASE_CONTRACT_PDF_LAYOUT,
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
   PurchaseContractPdfFontError,
   purchaseContractPdfHeaderMetadataLayout,
+  purchaseContractPdfHeaderMetadataRows,
   purchaseContractPdfPartyColumnLayout,
   purchaseContractPdfPartyRows,
   purchaseContractPdfSharedPartyRowHeights,
@@ -229,13 +232,27 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model.totalAmount).toBe("5760.00");
   });
 
-  it("right-aligns the complete header metadata block to the printable edge", () => {
+  it("uses fixed form columns for header metadata", () => {
     const layout = purchaseContractPdfHeaderMetadataLayout();
+    const rows = purchaseContractPdfHeaderMetadataRows(
+      buildPurchaseContractPdfViewModel(contractFixture()),
+    );
 
-    expect(PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN).toBe("right");
-    expect(layout.align).toBe("right");
-    expect(layout.x + layout.width).toBeCloseTo(layout.rightEdge);
+    expect(layout).toMatchObject({
+      labelWidth: PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+      labelAlign: "right",
+      valueAlign: "left",
+    });
+    expect(PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN).toBe("right");
+    expect(PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN).toBe("left");
+    expect(layout.valueX).toBe(layout.labelX + layout.labelWidth);
+    expect(layout.valueX + layout.valueWidth).toBeCloseTo(layout.rightEdge);
     expect(layout.rightEdge).toBeCloseTo(595.22 - 36);
+    expect(rows).toEqual([
+      { label: "合同编号：", value: "PUR26WS0826" },
+      { label: "签约时间：", value: "2026年08月28日" },
+      { label: "签约地点：", value: "天津" },
+    ]);
   });
 
   it("keeps logical remark lines and their original number markers", () => {
@@ -286,9 +303,13 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(columnLayout).toEqual({
       labelX: 36,
       labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+      labelAlign: "right",
       valueX: 82,
       valueWidth: 200.61,
+      valueAlign: "left",
     });
+    expect(columnLayout.labelAlign).toBe("right");
+    expect(columnLayout.valueAlign).toBe("left");
     const rowHeights = purchaseContractPdfSharedPartyRowHeights(
       buyerRows,
       sellerRows,

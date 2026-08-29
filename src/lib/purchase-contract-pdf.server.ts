@@ -26,7 +26,9 @@ export const PURCHASE_CONTRACT_PDF_BOLD_FONT_PATH = path.join(
   "FandolHei-Bold.otf",
 );
 
-export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN = "right" as const;
+export const PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN = "left" as const;
+export const PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH = 62;
 export const PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH = 46;
 export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
   "PurchaseContractBoldFont";
@@ -163,12 +165,28 @@ export function purchaseContractPdfHeaderMetadataLayout() {
   const width = 178;
   const printableWidth = PAGE_WIDTH - CONTENT_MARGIN * 2;
   const leftWidth = printableWidth - width - gap;
+  const labelX = CONTENT_MARGIN + leftWidth + gap;
   return {
-    x: CONTENT_MARGIN + leftWidth + gap,
-    width,
+    labelX,
+    labelWidth: PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+    labelAlign: PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
+    valueX: labelX + PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+    valueWidth: width - PURCHASE_CONTRACT_PDF_HEADER_METADATA_LABEL_WIDTH,
+    valueAlign: PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
     rightEdge: PAGE_WIDTH - CONTENT_MARGIN,
-    align: PURCHASE_CONTRACT_PDF_HEADER_METADATA_ALIGN,
   };
+}
+
+export function purchaseContractPdfHeaderMetadataRows(
+  model: PurchaseContractPdfViewModel,
+) {
+  return [
+    { label: "合同编号：", value: model.contractNo },
+    { label: "签约时间：", value: model.signingDate },
+    model.signingPlace
+      ? { label: "签约地点：", value: model.signingPlace }
+      : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
 function renderHeader(
@@ -193,29 +211,50 @@ function renderHeader(
   const y = document.y;
   const gap = 18;
   const metadataLayout = purchaseContractPdfHeaderMetadataLayout();
-  const rightWidth = metadataLayout.width;
+  const rightWidth =
+    metadataLayout.labelWidth + metadataLayout.valueWidth;
   const leftWidth = contentWidth(document) - rightWidth - gap;
   const leftText = `买方：${model.buyer.legalName}\n卖方：${model.seller.legalName}`;
-  const rightLines = [
-    `合同编号：${model.contractNo}`,
-    `签约时间：${model.signingDate}`,
-    model.signingPlace ? `签约地点：${model.signingPlace}` : null,
-  ].filter((line): line is string => line !== null);
-  const rightText = rightLines.join("\n");
+  const metadataRows = purchaseContractPdfHeaderMetadataRows(model);
 
   document.fontSize(BODY_FONT_SIZE);
+  const metadataRowHeights = metadataRows.map((row) =>
+    Math.max(
+      document.heightOfString(row.label, {
+        width: metadataLayout.labelWidth,
+        lineGap: 2,
+      }),
+      document.heightOfString(row.value, {
+        width: metadataLayout.valueWidth,
+        lineGap: 2,
+      }),
+    ),
+  );
+  const metadataHeight = metadataRowHeights.reduce(
+    (total, height) => total + height,
+    0,
+  );
   const blockHeight = Math.max(
     document.heightOfString(leftText, { width: leftWidth, lineGap: 2 }),
-    document.heightOfString(rightText, { width: rightWidth, lineGap: 2 }),
+    metadataHeight,
   );
   document.text(leftText, CONTENT_MARGIN, y, {
     width: leftWidth,
     lineGap: 2,
   });
-  document.text(rightText, metadataLayout.x, y, {
-    width: metadataLayout.width,
-    align: metadataLayout.align,
-    lineGap: 2,
+  let metadataY = y;
+  metadataRows.forEach((row, index) => {
+    document.text(row.label, metadataLayout.labelX, metadataY, {
+      width: metadataLayout.labelWidth,
+      align: metadataLayout.labelAlign,
+      lineGap: 2,
+    });
+    document.text(row.value, metadataLayout.valueX, metadataY, {
+      width: metadataLayout.valueWidth,
+      align: metadataLayout.valueAlign,
+      lineGap: 2,
+    });
+    metadataY += metadataRowHeights[index];
   });
   document.y = y + blockHeight + 5;
 }
@@ -488,8 +527,10 @@ export function purchaseContractPdfPartyColumnLayout(
   return {
     labelX: startX,
     labelWidth: PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
+    labelAlign: PURCHASE_CONTRACT_PDF_FORM_LABEL_ALIGN,
     valueX: startX + PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
     valueWidth: columnWidth - PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH - 5,
+    valueAlign: PURCHASE_CONTRACT_PDF_FORM_VALUE_ALIGN,
   };
 }
 
@@ -561,18 +602,22 @@ function renderBottomPartyBlock(
       .fontSize(BODY_FONT_SIZE)
       .text(`${buyerRow.label}：`, buyerLayout.labelX, rowY, {
         width: buyerLayout.labelWidth,
+        align: buyerLayout.labelAlign,
         lineGap: 2,
       });
     document.text(buyerRow.value, buyerLayout.valueX, rowY, {
       width: buyerLayout.valueWidth,
+      align: buyerLayout.valueAlign,
       lineGap: 2,
     });
     document.text(`${sellerRow.label}：`, sellerLayout.labelX, rowY, {
       width: sellerLayout.labelWidth,
+      align: sellerLayout.labelAlign,
       lineGap: 2,
     });
     document.text(sellerRow.value, sellerLayout.valueX, rowY, {
       width: sellerLayout.valueWidth,
+      align: sellerLayout.valueAlign,
       lineGap: 2,
     });
     rowY += rowHeights[index];

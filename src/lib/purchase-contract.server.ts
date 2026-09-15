@@ -97,6 +97,13 @@ async function prepareContractData(
   existing?: ExistingPurchaseContract,
   options: PurchaseContractUpdateOptions = {},
 ) {
+  if (input.deliveryDate && input.deliveryTimeText) {
+    const message = "交货日期和交货时间条款只能填写一种。";
+    throw new PurchaseContractValidationError({
+      deliveryDate: message,
+      deliveryTimeText: message,
+    });
+  }
   const productIds = [...new Set(input.items.map((item) => item.productId))];
   const [company, supplier, products] = await Promise.all([
     transaction.company.findUnique({ where: { id: input.companyId } }),
@@ -230,6 +237,7 @@ async function prepareContractData(
       sellerBankName: sellerSnapshot.bankName,
       sellerBankAccount: sellerSnapshot.bankAccount,
       deliveryDate: input.deliveryDate ? dateFromText(input.deliveryDate) : null,
+      deliveryTimeText: input.deliveryTimeText,
       deliveryAddress: input.deliveryAddress,
       deliveryContactName: input.deliveryContactName,
       deliveryContactPhone: input.deliveryContactPhone,

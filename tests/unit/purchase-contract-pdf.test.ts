@@ -32,6 +32,7 @@ import {
   PURCHASE_CONTRACT_PDF_HEADER_METADATA_PADDING,
   PURCHASE_CONTRACT_PDF_HEADER_VALUE_ALIGN,
   PURCHASE_CONTRACT_PDF_LAYOUT,
+  PURCHASE_CONTRACT_PDF_PARTY_BOTTOM_GAP,
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_ALIGN,
   PURCHASE_CONTRACT_PDF_PARTY_LABEL_WIDTH,
   PURCHASE_CONTRACT_PDF_PARTY_VALUE_ALIGN,
@@ -42,6 +43,7 @@ import {
   PurchaseContractPdfUnsupportedGlyphError,
   purchaseContractPdfHeaderMetadataLayout,
   purchaseContractPdfHeaderMetadataRows,
+  purchaseContractPdfBottomPartyPlacement,
   purchaseContractPdfDeliveryLabelCharacterSpacing,
   purchaseContractPdfDeliveryRowLayout,
   purchaseContractPdfPartyColumnLayout,
@@ -78,6 +80,7 @@ function contractFixture(): PurchaseContractPdfSource {
     sellerBankName: "卖方开户行",
     sellerBankAccount: "seller-account",
     deliveryDate: new Date("2026-09-01T00:00:00.000Z"),
+    deliveryTimeText: null,
     deliveryAddress: "浙江省乐清市历史收货地址",
     deliveryContactName: "张建英",
     deliveryContactPhone: "13800000000",
@@ -223,6 +226,7 @@ describe("Purchase Contract PDF historical view model", () => {
     {
       label: "date only",
       date: new Date("2026-09-01T00:00:00.000Z"),
+      text: null,
       address: null,
       recipient: null,
       phone: null,
@@ -233,8 +237,29 @@ describe("Purchase Contract PDF historical view model", () => {
       },
     },
     {
+      label: "contractual text",
+      date: null,
+      text: "合同签订后30个工作日内",
+      address: "浙江省乐清市翁垟街道高桥村龙栖路142号",
+      recipient: "张建英",
+      phone: "13587623210",
+      expected: {
+        label: "交货时间",
+        value: "合同签订后30个工作日内",
+        deliveryRows: [
+          {
+            label: "发货地址",
+            value: "浙江省乐清市翁垟街道高桥村龙栖路142号",
+          },
+          { label: "收货人", value: "张建英" },
+          { label: "电话", value: "13587623210" },
+        ],
+      },
+    },
+    {
       label: "address only",
       date: null,
+      text: null,
       address: "浙江省乐清市翁垟街道高桥村龙栖路142号",
       recipient: null,
       phone: null,
@@ -252,6 +277,7 @@ describe("Purchase Contract PDF historical view model", () => {
     {
       label: "recipient only",
       date: null,
+      text: null,
       address: null,
       recipient: "张建英",
       phone: null,
@@ -264,6 +290,7 @@ describe("Purchase Contract PDF historical view model", () => {
     {
       label: "phone only",
       date: null,
+      text: null,
       address: null,
       recipient: null,
       phone: "13587623210",
@@ -273,9 +300,10 @@ describe("Purchase Contract PDF historical view model", () => {
         deliveryRows: [{ label: "电话", value: "13587623210" }],
       },
     },
-  ])("builds a delivery term for $label", ({ date, address, recipient, phone, expected }) => {
+  ])("builds a delivery term for $label", ({ date, text, address, recipient, phone, expected }) => {
     const source = contractFixture();
     source.deliveryDate = date;
+    source.deliveryTimeText = text;
     source.deliveryAddress = address;
     source.deliveryContactName = recipient;
     source.deliveryContactPhone = phone;
@@ -290,6 +318,7 @@ describe("Purchase Contract PDF historical view model", () => {
   it("omits delivery and contract-change terms when their stored fields are empty", () => {
     const source = contractFixture();
     source.deliveryDate = null;
+    source.deliveryTimeText = "  \n  ";
     source.deliveryAddress = "  ";
     source.deliveryContactName = null;
     source.deliveryContactPhone = "";
@@ -306,6 +335,31 @@ describe("Purchase Contract PDF historical view model", () => {
     expect(model.terms.map((term) => term.sectionNumber)).toEqual([
       2, 3, 4, 5, 6, 7,
     ]);
+  });
+
+  it("preserves normalized multiline contractual delivery text", () => {
+    const source = contractFixture();
+    source.deliveryDate = null;
+    source.deliveryTimeText =
+      "合同签订后30个工作日内完成交货。\r\n具体送货日期由买方至少提前3个工作日通知卖方。";
+
+    expect(
+      buildPurchaseContractPdfViewModel(source).terms.find(
+        (term) => term.label === "交货时间",
+      ),
+    ).toMatchObject({
+      value:
+        "合同签订后30个工作日内完成交货。\n具体送货日期由买方至少提前3个工作日通知卖方。",
+    });
+  });
+
+  it("fails safely when persisted delivery modes conflict", () => {
+    const source = contractFixture();
+    source.deliveryTimeText = "合同签订后30个工作日内";
+
+    expect(() => buildPurchaseContractPdfViewModel(source)).toThrow(
+      PurchaseContractPdfIntegrityError,
+    );
   });
 
   it("preserves populated multi-line contract change text as regular terms", () => {
@@ -370,6 +424,48 @@ describe("Purchase Contract PDF historical view model", () => {
       subLineWidth: 479.22,
     });
     expect(layout.subLineX).toBeGreaterThan(layout.bodyX);
+  });
+
+  it("anchors the atomic party block at the printable bottom", () => {
+    expect(PURCHASE_CONTRACT_PDF_PARTY_BOTTOM_GAP).toBe(3);
+    expect(purchaseContractPdfBottomPartyPlacement(180, 810, 150)).toEqual({
+      needsPageBreak: false,
+      y: 657,
+    });
+    expect(purchaseContractPdfBottomPartyPlacement(640, 810, 150)).toEqual({
+      needsPageBreak: false,
+      y: 657,
+    });
+    expect(657 + 150).toBe(807);
+    expect(657 + 150).toBeLessThan(842 - 22);
+  });
+
+  it("moves an unfit party block to the next-page bottom anchor", () => {
+    const currentPage = purchaseContractPdfBottomPartyPlacement(658, 810, 150);
+    expect(currentPage.needsPageBreak).toBe(true);
+
+    const nextPage = purchaseContractPdfBottomPartyPlacement(28, 810, 150);
+    expect(nextPage).toEqual({ needsPageBreak: false, y: 657 });
+  });
+
+  it("uses the same bottom rule on a later terms page or required third page", () => {
+    const fittingSecondPage = purchaseContractPdfBottomPartyPlacement(
+      600,
+      810,
+      150,
+    );
+    expect(fittingSecondPage).toEqual({ needsPageBreak: false, y: 657 });
+
+    const fullSecondPage = purchaseContractPdfBottomPartyPlacement(
+      700,
+      810,
+      150,
+    );
+    expect(fullSecondPage.needsPageBreak).toBe(true);
+    expect(purchaseContractPdfBottomPartyPlacement(28, 810, 150)).toEqual({
+      needsPageBreak: false,
+      y: 657,
+    });
   });
 
   it("uses measured distributed delivery labels with fixed colon and value columns", () => {
@@ -782,6 +878,34 @@ describe("Purchase Contract PDF bundled fonts", () => {
     expect(pdfPageCount(pdf)).toBe(1);
   });
 
+  it("leaves intentional whitespace and anchors a short contract party block at the bottom", async () => {
+    const source = contractFixture();
+    source.packagingTerms = null;
+    source.specialNotice = null;
+    source.inspectionTerms = null;
+    source.qualityTerms = null;
+    source.paymentTerms = null;
+    source.shippingMethod = null;
+    source.changeTerms = null;
+    source.disputeTerms = null;
+    source.breachTerms = null;
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      const pdf = await renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(source),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const buyerLabelCall = textSpy.mock.calls.findLast(
+        ([text, x]) => text === "买" && x === 36,
+      );
+
+      expect(pdfPageCount(pdf)).toBe(1);
+      expect(buyerLabelCall?.[2]).toBeGreaterThan(600);
+    } finally {
+      textSpy.mockRestore();
+    }
+  });
+
   it("renders contract change entirely in Regular when no notice is present", async () => {
     const source = contractFixture();
     source.specialNotice = null;
@@ -912,6 +1036,33 @@ describe("Purchase Contract PDF bundled fonts", () => {
     }
   });
 
+  it("renders multiline contractual delivery text in the numbered-term body box", async () => {
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      const source = contractFixture();
+      source.deliveryDate = null;
+      source.deliveryTimeText =
+        "合同签订后30个工作日内完成交货。\n具体送货日期由买方至少提前3个工作日通知卖方。";
+      await renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(source),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const layout = purchaseContractPdfTermLayout();
+      const deliveryCall = textSpy.mock.calls.find(
+        ([text]) =>
+          text ===
+          "交货时间：合同签订后30个工作日内完成交货。\n具体送货日期由买方至少提前3个工作日通知卖方。",
+      );
+
+      expect(deliveryCall?.[1]).toBe(layout.bodyX);
+      expect(deliveryCall?.[3]).toMatchObject({
+        width: layout.bodyWidth,
+      });
+    } finally {
+      textSpy.mockRestore();
+    }
+  });
+
   it("fails safely for unsupported regular and bold dynamic glyphs", async () => {
     const regularSource = contractFixture();
     regularSource.buyerLegalName = "买方😀";
@@ -930,19 +1081,45 @@ describe("Purchase Contract PDF bundled fonts", () => {
         PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
       ),
     ).rejects.toBeInstanceOf(PurchaseContractPdfUnsupportedGlyphError);
+
+    const deliverySource = contractFixture();
+    deliverySource.deliveryDate = null;
+    deliverySource.deliveryTimeText = "合同签订后😀个工作日内";
+    await expect(
+      renderPurchaseContractPdf(
+        buildPurchaseContractPdfViewModel(deliverySource),
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      ),
+    ).rejects.toBeInstanceOf(PurchaseContractPdfUnsupportedGlyphError);
   });
 
-  it("allows long stored terms to flow onto multiple pages", async () => {
+  it("anchors the atomic party block on the final page above correct footers", async () => {
     const source = contractFixture();
     source.additionalTerms = "附加条款内容。".repeat(1_200);
     const model = buildPurchaseContractPdfViewModel(source);
+    const textSpy = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      const pdf = await renderPurchaseContractPdf(
+        model,
+        PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
+      );
+      const pageCount = pdfPageCount(pdf);
+      const buyerLabelCall = textSpy.mock.calls.findLast(
+        ([text, x]) => text === "买" && x === 36,
+      );
+      const footerCalls = textSpy.mock.calls.filter(
+        ([text]) => typeof text === "string" && /^第 \d+ 页 \/ 共 \d+ 页$/.test(text),
+      );
 
-    const pdf = await renderPurchaseContractPdf(
-      model,
-      PURCHASE_CONTRACT_PDF_DEFAULT_FONT_PATH,
-    );
-
-    expect(pdfPageCount(pdf)).toBeGreaterThan(1);
+      expect(pageCount).toBeGreaterThan(1);
+      expect(buyerLabelCall?.[2]).toBeGreaterThan(600);
+      expect(footerCalls).toHaveLength(pageCount);
+      expect(footerCalls.at(-1)?.[0]).toBe(
+        `第 ${pageCount} 页 / 共 ${pageCount} 页`,
+      );
+    } finally {
+      textSpy.mockRestore();
+    }
   });
 
   it("omits a one-page footer and creates footers only for multiple pages", () => {

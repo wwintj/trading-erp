@@ -42,6 +42,7 @@ export const PURCHASE_CONTRACT_PDF_BOLD_FONT_NAME =
 export const PURCHASE_CONTRACT_PDF_TERM_MARKER_WIDTH = 22;
 export const PURCHASE_CONTRACT_PDF_TERM_SUBLINE_INDENT = 22;
 export const PURCHASE_CONTRACT_PDF_DELIVERY_LABEL_WIDTH = 56;
+export const PURCHASE_CONTRACT_PDF_PARTY_BOTTOM_GAP = 3;
 
 export class PurchaseContractPdfFontError extends Error {
   constructor() {
@@ -834,6 +835,19 @@ export function purchaseContractPdfSharedPartyRowHeights(
   });
 }
 
+export function purchaseContractPdfBottomPartyPlacement(
+  currentY: number,
+  availableBodyBottom: number,
+  blockHeight: number,
+  bottomGap = PURCHASE_CONTRACT_PDF_PARTY_BOTTOM_GAP,
+) {
+  const anchoredY = availableBodyBottom - blockHeight - bottomGap;
+  return {
+    needsPageBreak: currentY > anchoredY,
+    y: Math.max(currentY, anchoredY),
+  };
+}
+
 function renderBottomPartyBlock(
   document: PDFKit.PDFDocument,
   model: PurchaseContractPdfViewModel,
@@ -869,10 +883,24 @@ function renderBottomPartyBlock(
   );
   const blockHeight = rowHeights.reduce((sum, height) => sum + height, 0) + 14;
 
-  const pageBreak = ensureSpace(document, blockHeight + 6, fontSource);
-  const y = pageBreak
-    ? document.y
-    : Math.max(document.y, bodyBottom(document) - blockHeight - 3);
+  let placement = purchaseContractPdfBottomPartyPlacement(
+    document.y,
+    bodyBottom(document),
+    blockHeight,
+  );
+  if (placement.needsPageBreak) {
+    document.addPage();
+    applyFont(document, fontSource).fillColor("#111111");
+    placement = purchaseContractPdfBottomPartyPlacement(
+      document.y,
+      bodyBottom(document),
+      blockHeight,
+    );
+  }
+  if (placement.needsPageBreak) {
+    throw new Error("Purchase contract party block exceeds the printable area");
+  }
+  const y = placement.y;
   horizontalRule(document, y, 1.1);
   const separatorX = CONTENT_MARGIN + columnWidth + gap / 2;
   document

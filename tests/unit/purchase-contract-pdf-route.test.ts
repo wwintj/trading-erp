@@ -31,6 +31,7 @@ function contractFixture(status: "DRAFT" | "FINAL" | "CANCELLED" = "FINAL") {
     sellerBankName: null,
     sellerBankAccount: null,
     deliveryDate: null,
+    deliveryTimeText: null,
     deliveryAddress: null,
     deliveryContactName: null,
     deliveryContactPhone: null,

@@ -57,6 +57,7 @@ const input: PurchaseContractInput = {
   companyId: "company-1",
   supplierId: "supplier-1",
   deliveryDate: "2026-09-01",
+  deliveryTimeText: null,
   deliveryAddress: "浙江乐清",
   deliveryContactName: "张建英",
   deliveryContactPhone: null,
@@ -220,6 +221,10 @@ describe("Purchase Contract persistence", () => {
     expect(createData.sellerLegalName).toBe("惠州市华业升塑胶制品有限公司");
     expect(createData.totalAmount.toString()).toBe("5760");
     expect(createData.specialNotice).toBe("重点说明");
+    expect(createData.deliveryDate).toEqual(
+      new Date("2026-09-01T00:00:00.000Z"),
+    );
+    expect(createData.deliveryTimeText).toBeNull();
     expect(createData.items.create[0]).toMatchObject({
       productCode: "WS-H42",
       productName: "PVC热收缩套管",
@@ -236,6 +241,53 @@ describe("Purchase Contract persistence", () => {
     expect(createData.buyerLegalName).toBe("天津纬信科技有限公司");
     expect(createData.sellerLegalName).toBe("惠州市华业升塑胶制品有限公司");
     expect(createData.items.create[0].productName).toBe("PVC热收缩套管");
+  });
+
+  it("persists contractual delivery text for create and Draft update", async () => {
+    const textModeInput = {
+      ...input,
+      deliveryDate: null,
+      deliveryTimeText:
+        "合同签订后30个工作日内完成交货。\n具体日期由买方通知。",
+    };
+
+    await createPurchaseContract(textModeInput);
+    expect(
+      mocks.transaction.purchaseContract.create.mock.calls[0][0].data,
+    ).toMatchObject({
+      deliveryDate: null,
+      deliveryTimeText:
+        "合同签订后30个工作日内完成交货。\n具体日期由买方通知。",
+    });
+
+    await updatePurchaseContract(
+      "contract-1",
+      draftUpdateInput({
+        deliveryDate: null,
+        deliveryTimeText: "收到预付款后15个工作日内",
+      }),
+    );
+    expect(
+      mocks.transaction.purchaseContract.update.mock.calls[0][0].data,
+    ).toMatchObject({
+      deliveryDate: null,
+      deliveryTimeText: "收到预付款后15个工作日内",
+    });
+  });
+
+  it("rejects simultaneous delivery values inside the transaction", async () => {
+    await expect(
+      createPurchaseContract({
+        ...input,
+        deliveryTimeText: "合同签订后30个工作日内",
+      }),
+    ).rejects.toMatchObject({
+      fieldErrors: {
+        deliveryDate: "交货日期和交货时间条款只能填写一种。",
+        deliveryTimeText: "交货日期和交货时间条款只能填写一种。",
+      },
+    } satisfies Partial<PurchaseContractValidationError>);
+    expect(mocks.transaction.purchaseContract.create).not.toHaveBeenCalled();
   });
 
   it("validates Company, Supplier, and Product existence inside the transaction", async () => {

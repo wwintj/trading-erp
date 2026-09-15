@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +18,7 @@ function contractForm(overrides: Record<string, string> = {}) {
   formData.set("companyId", "company-1");
   formData.set("supplierId", "supplier-1");
   formData.set("deliveryDate", "");
+  formData.set("deliveryTimeText", "");
   formData.set("deliveryAddress", "   ");
   formData.set("deliveryContactName", "   ");
   formData.set("deliveryContactPhone", "   ");
@@ -90,6 +94,8 @@ describe("Purchase Contract validation", () => {
         contractNo: "PUR26WS0826",
         signingDate: "2026-08-28",
         signingPlace: "天津",
+        deliveryDate: null,
+        deliveryTimeText: null,
         deliveryAddress: null,
         items: [
           { productId: "product-1", quantity: "6400", unitPrice: "0.900" },
@@ -117,6 +123,69 @@ describe("Purchase Contract validation", () => {
     expect(tooLong).toMatchObject({
       ok: false,
       fieldErrors: { specialNotice: "不能超过 10000 个字符。" },
+    });
+  });
+
+  it("supports exact-date and contractual-text delivery modes", () => {
+    expect(
+      validatePurchaseContractForm(
+        contractForm({ deliveryDate: "2026-09-01" }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      input: { deliveryDate: "2026-09-01", deliveryTimeText: null },
+    });
+
+    expect(
+      validatePurchaseContractForm(
+        contractForm({
+          deliveryTimeText:
+            "  合同签订后30个工作日内完成交货。\n具体日期另行通知。  ",
+        }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      input: {
+        deliveryDate: null,
+        deliveryTimeText:
+          "合同签订后30个工作日内完成交货。\n具体日期另行通知。",
+      },
+    });
+  });
+
+  it("rejects simultaneous delivery modes with visible field errors", () => {
+    expect(
+      validatePurchaseContractForm(
+        contractForm({
+          deliveryDate: "2026-09-01",
+          deliveryTimeText: "合同签订后30个工作日内",
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      fieldErrors: {
+        deliveryDate: "交货日期和交货时间条款只能填写一种。",
+        deliveryTimeText: "交货日期和交货时间条款只能填写一种。",
+      },
+    });
+  });
+
+  it("normalizes blank delivery text and enforces its 2000-character limit", () => {
+    expect(
+      validatePurchaseContractForm(
+        contractForm({ deliveryTimeText: " \n  " }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      input: { deliveryDate: null, deliveryTimeText: null },
+    });
+    expect(
+      validatePurchaseContractForm(
+        contractForm({ deliveryTimeText: "交".repeat(2001) }),
+      ),
+    ).toMatchObject({
+      ok: false,
+      fieldErrors: { deliveryTimeText: "不能超过 2000 个字符。" },
     });
   });
 
@@ -194,5 +263,20 @@ describe("Purchase Contract validation", () => {
         signingPlace: "不能超过 255 个字符。",
       },
     });
+  });
+});
+
+describe("Purchase Contract delivery-time migration", () => {
+  it("adds only the nullable delivery_time_text column", () => {
+    expect(
+      readFileSync(
+        resolve(
+          "prisma/migrations/20260830010000_add_purchase_contract_delivery_time_text/migration.sql",
+        ),
+        "utf8",
+      ).trim(),
+    ).toBe(
+      "ALTER TABLE `purchase_contract`\nADD COLUMN `delivery_time_text` TEXT NULL;",
+    );
   });
 });

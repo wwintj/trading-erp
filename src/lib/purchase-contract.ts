@@ -18,6 +18,7 @@ export const PURCHASE_CONTRACT_SAVE_INTENTS = {
 export const PURCHASE_CONTRACT_FIELD_LIMITS = {
   contractNo: 64,
   signingPlace: 255,
+  deliveryTimeText: 2000,
   deliveryAddress: 10000,
   deliveryContactName: 128,
   deliveryContactPhone: 64,
@@ -58,6 +59,7 @@ export type PurchaseContractInput = {
   companyId: string;
   supplierId: string;
   deliveryDate: string | null;
+  deliveryTimeText: string | null;
   deliveryAddress: string | null;
   deliveryContactName: string | null;
   deliveryContactPhone: string | null;
@@ -294,6 +296,13 @@ export function validatePurchaseContractForm(formData: FormData):
     }
   }
 
+  const deliveryTimeText = optionalValues.deliveryTimeText;
+  if (deliveryDate && deliveryTimeText) {
+    const message = "交货日期和交货时间条款只能填写一种。";
+    fieldErrors.deliveryDate ??= message;
+    fieldErrors.deliveryTimeText ??= message;
+  }
+
   let rawItems: unknown = [];
   try {
     rawItems = JSON.parse(formString(formData, "itemsJson") || "[]");
@@ -363,6 +372,7 @@ export function validatePurchaseContractForm(formData: FormData):
       companyId,
       supplierId,
       deliveryDate: optionalValue(deliveryDate),
+      deliveryTimeText: optionalValue(deliveryTimeText),
       deliveryAddress: optionalValue(optionalValues.deliveryAddress),
       deliveryContactName: optionalValue(optionalValues.deliveryContactName),
       deliveryContactPhone: optionalValue(optionalValues.deliveryContactPhone),

@@ -47,8 +47,11 @@ import {
   PURCHASE_CONTRACT_SUPPLIER_REFRESH_CONFIRMATION,
   PurchaseContractItemIdentityError,
   confirmPurchaseContractSupplierRefresh,
+  derivePurchaseContractDeliveryTimeMode,
   getPurchaseContractSaveNavigation,
+  purchaseContractDeliverySubmissionFields,
   purchaseContractItemDeleteConfirmation,
+  purchaseContractMutualDeliveryError,
   removePurchaseContractFormRow,
   synchronizePurchaseContractFormRows,
 } from "@/components/purchase-contract/purchase-contract-form";
@@ -103,6 +106,7 @@ function contract(status: "DRAFT" | "FINAL" | "CANCELLED" = "DRAFT") {
     sellerBankName: null,
     sellerBankAccount: null,
     deliveryDate: new Date("2026-09-01T00:00:00.000Z"),
+    deliveryTimeText: null,
     deliveryAddress: "浙江乐清",
     deliveryContactName: "张建英",
     deliveryContactPhone: null,
@@ -234,6 +238,11 @@ describe("Purchase Contract pages", () => {
     expect(html).toContain("产品（可更换）");
     expect(html).toContain("选择其它产品即可更换本条合同明细。");
     expect(html).toContain("border-red-200 text-red-700");
+    expect(html).toContain("交货时间方式");
+    expect(html).toContain("指定日期");
+    expect(html).toContain("条款描述");
+    expect(html).toContain("交货日期");
+    expect(html).not.toContain("交货时间条款");
     expect(html).toContain("合同总金额（元）");
     expect(html).toContain("合同变更");
     expect(html).toContain("特别注意");
@@ -247,6 +256,93 @@ describe("Purchase Contract pages", () => {
     expect(html).not.toContain("更新供应商资料");
     expect(createButton).toContain('name="intent"');
     expect(createButton).toContain('value="save"');
+  });
+
+  it("derives delivery mode and submits only its canonical active value", () => {
+    expect(
+      derivePurchaseContractDeliveryTimeMode({
+        deliveryDate: null,
+        deliveryTimeText: null,
+      }),
+    ).toBe("date");
+    expect(
+      derivePurchaseContractDeliveryTimeMode({
+        deliveryDate: "2026-09-01",
+        deliveryTimeText: null,
+      }),
+    ).toBe("date");
+    expect(
+      derivePurchaseContractDeliveryTimeMode({
+        deliveryDate: null,
+        deliveryTimeText: "合同签订后30个工作日内",
+      }),
+    ).toBe("text");
+
+    expect(
+      purchaseContractDeliverySubmissionFields(
+        "text",
+        "2026-09-01",
+        "合同签订后30个工作日内",
+      ),
+    ).toEqual({
+      deliveryDate: "",
+      deliveryTimeText: "合同签订后30个工作日内",
+    });
+    expect(
+      purchaseContractDeliverySubmissionFields(
+        "date",
+        "2026-09-01",
+        "合同签订后30个工作日内",
+      ),
+    ).toEqual({ deliveryDate: "2026-09-01", deliveryTimeText: "" });
+    expect(
+      purchaseContractMutualDeliveryError({
+        deliveryDate: "交货日期和交货时间条款只能填写一种。",
+        deliveryTimeText: "交货日期和交货时间条款只能填写一种。",
+      }),
+    ).toBe("交货日期和交货时间条款只能填写一种。");
+  });
+
+  it("renders existing contractual delivery text in text mode", async () => {
+    mocks.getCurrentSession.mockResolvedValue(adminSession);
+    mocks.getPurchaseContractById.mockResolvedValue({
+      ...contract("DRAFT"),
+      deliveryDate: null,
+      deliveryTimeText:
+        "合同签订后30个工作日内完成交货。\n具体日期由买方通知。",
+    });
+
+    const html = renderToStaticMarkup(
+      await PurchaseContractPage({ params: Promise.resolve({ id: "contract-1" }) }),
+    );
+
+    expect(html).toContain("交货时间条款");
+    expect(html).toContain(
+      "合同签订后30个工作日内完成交货。\n具体日期由买方通知。",
+    );
+    expect(html).toContain('maxLength="2000"');
+    expect(html).not.toContain('id="deliveryDateInput"');
+    expect(html).toContain('name="deliveryDate" value=""');
+    expect(html).toContain(
+      'name="deliveryTimeText" value="合同签订后30个工作日内完成交货。\n具体日期由买方通知。"',
+    );
+    expect(html).toContain('checked="" value="text"');
+    expect(html).toContain("浙江乐清");
+    expect(html).toContain("张建英");
+  });
+
+  it("renders an existing exact delivery date in date mode", async () => {
+    mocks.getCurrentSession.mockResolvedValue(adminSession);
+    mocks.getPurchaseContractById.mockResolvedValue(contract("DRAFT"));
+
+    const html = renderToStaticMarkup(
+      await PurchaseContractPage({ params: Promise.resolve({ id: "contract-1" }) }),
+    );
+
+    expect(html).toContain('name="deliveryDate" value="2026-09-01"');
+    expect(html).toContain('name="deliveryTimeText" value=""');
+    expect(html).toContain('checked="" value="date"');
+    expect(html).toContain('id="deliveryDateInput"');
   });
 
   it("refreshes existing successful saves once and only replaces after create", () => {

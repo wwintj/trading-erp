@@ -158,6 +158,7 @@ model PurchaseContract {
   sellerBankName          String?                @db.VarChar(255)
   sellerBankAccount       String?                @db.VarChar(128)
   deliveryDate            DateTime?              @db.Date
+  deliveryTimeText        String?                @map("delivery_time_text") @db.Text
   deliveryAddress         String?                @db.Text
   deliveryContactName     String?                @db.VarChar(128)
   deliveryContactPhone    String?                @db.VarChar(64)

@@ -29,6 +29,7 @@ export type PurchaseContractPdfSource = {
   sellerBankName: string | null;
   sellerBankAccount: string | null;
   deliveryDate: Date | null;
+  deliveryTimeText: string | null;
   deliveryAddress: string | null;
   deliveryContactName: string | null;
   deliveryContactPhone: string | null;
@@ -389,6 +390,11 @@ export function buildPurchaseContractPdfViewModel(
   const deliveryDate = source.deliveryDate
     ? chineseDate(source.deliveryDate)
     : null;
+  const deliveryTimeText = optionalText(source.deliveryTimeText);
+  if (deliveryDate && deliveryTimeText) {
+    throw new PurchaseContractPdfIntegrityError();
+  }
+  const deliveryTime = deliveryTimeText ?? deliveryDate;
   const deliveryAddress = optionalText(source.deliveryAddress);
   const deliveryContactName = optionalText(source.deliveryContactName);
   const deliveryContactPhone = optionalText(source.deliveryContactPhone);
@@ -416,10 +422,10 @@ export function buildPurchaseContractPdfViewModel(
   ): StoredTerm | null =>
     value ? { label, value, emphasized } : null;
   const deliveryTerm: StoredTerm | null =
-    deliveryDate || deliveryRows.length > 0
+    deliveryTime || deliveryRows.length > 0
       ? {
-          label: deliveryDate ? "交货时间" : "交货信息",
-          value: deliveryDate ?? "",
+          label: deliveryTime ? "交货时间" : "交货信息",
+          value: deliveryTime ?? "",
           deliveryRows,
         }
       : null;

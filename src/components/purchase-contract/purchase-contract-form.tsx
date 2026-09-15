@@ -46,6 +46,33 @@ export type ContractFormValues = Omit<PurchaseContractInput, "items"> & {
 };
 
 export type PurchaseContractFormRow = ContractFormItem & { key: number };
+export type PurchaseContractDeliveryTimeMode = "date" | "text";
+
+export function derivePurchaseContractDeliveryTimeMode(values: {
+  deliveryDate: string | null;
+  deliveryTimeText: string | null;
+}): PurchaseContractDeliveryTimeMode {
+  return values.deliveryTimeText?.trim() ? "text" : "date";
+}
+
+export function purchaseContractDeliverySubmissionFields(
+  mode: PurchaseContractDeliveryTimeMode,
+  deliveryDate: string,
+  deliveryTimeText: string,
+) {
+  return mode === "date"
+    ? { deliveryDate, deliveryTimeText: "" }
+    : { deliveryDate: "", deliveryTimeText };
+}
+
+export function purchaseContractMutualDeliveryError(
+  fieldErrors?: Record<string, string>,
+) {
+  return fieldErrors?.deliveryDate &&
+    fieldErrors.deliveryDate === fieldErrors.deliveryTimeText
+    ? fieldErrors.deliveryDate
+    : undefined;
+}
 
 export type PurchaseContractSaveNavigation =
   | { type: "refresh" }
@@ -153,6 +180,16 @@ export function PurchaseContractForm({
   const [rows, setRows] = useState<PurchaseContractFormRow[]>(() =>
     initialValues.items.map((item, index) => ({ ...item, key: index })),
   );
+  const [deliveryMode, setDeliveryMode] =
+    useState<PurchaseContractDeliveryTimeMode>(() =>
+      derivePurchaseContractDeliveryTimeMode(initialValues),
+    );
+  const [deliveryDate, setDeliveryDate] = useState(
+    initialValues.deliveryDate ?? "",
+  );
+  const [deliveryTimeText, setDeliveryTimeText] = useState(
+    initialValues.deliveryTimeText ?? "",
+  );
   const [state, formAction, pending] = useActionState(
     savePurchaseContractAction,
     INITIAL_PURCHASE_CONTRACT_FORM_STATE,
@@ -215,6 +252,14 @@ export function PurchaseContractForm({
 
   const serializedItems = serializedContractItems(rows);
   const displayedTotal = calculateExactContractTotal(rows)?.totalAmount ?? "—";
+  const deliverySubmissionFields = purchaseContractDeliverySubmissionFields(
+    deliveryMode,
+    deliveryDate,
+    deliveryTimeText,
+  );
+  const mutualDeliveryError = purchaseContractMutualDeliveryError(
+    state.fieldErrors,
+  );
 
   return (
     <form
@@ -228,6 +273,16 @@ export function PurchaseContractForm({
     >
       {contractId ? <input type="hidden" name="contractId" value={contractId} /> : null}
       <input type="hidden" name="itemsJson" value={serializedItems} />
+      <input
+        type="hidden"
+        name="deliveryDate"
+        value={deliverySubmissionFields.deliveryDate}
+      />
+      <input
+        type="hidden"
+        name="deliveryTimeText"
+        value={deliverySubmissionFields.deliveryTimeText}
+      />
 
       <FormSection title="基本信息">
         <FormField label="合同编号" error={state.fieldErrors?.contractNo}>
@@ -451,9 +506,64 @@ export function PurchaseContractForm({
         <FormField label="包装要求" error={state.fieldErrors?.packagingTerms} wide>
           <ContractTextarea name="packagingTerms" value={initialValues.packagingTerms} disabled={pending} />
         </FormField>
-        <FormField label="交货日期" error={state.fieldErrors?.deliveryDate}>
-          <Input name="deliveryDate" type="date" defaultValue={initialValues.deliveryDate ?? ""} disabled={pending} />
-        </FormField>
+        <fieldset className="space-y-3 sm:col-span-2">
+          <legend className="text-sm font-medium">交货时间方式</legend>
+          <div className="flex flex-wrap gap-4">
+            {([
+              ["date", "指定日期"],
+              ["text", "条款描述"],
+            ] as const).map(([value, label]) => (
+              <label
+                key={value}
+                className="inline-flex cursor-pointer items-center gap-2 text-sm"
+              >
+                <input
+                  type="radio"
+                  name="deliveryTimeMode"
+                  value={value}
+                  checked={deliveryMode === value}
+                  onChange={() => setDeliveryMode(value)}
+                  disabled={pending}
+                  className="size-4 accent-[#16A34A]"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <FieldError message={mutualDeliveryError} />
+        </fieldset>
+        {deliveryMode === "date" ? (
+          <FormField
+            label="交货日期"
+            error={mutualDeliveryError ? undefined : state.fieldErrors?.deliveryDate}
+          >
+            <Input
+              id="deliveryDateInput"
+              type="date"
+              value={deliveryDate}
+              onChange={(event) => setDeliveryDate(event.target.value)}
+              disabled={pending}
+            />
+          </FormField>
+        ) : (
+          <FormField
+            label="交货时间条款"
+            error={
+              mutualDeliveryError
+                ? undefined
+                : state.fieldErrors?.deliveryTimeText
+            }
+            wide
+          >
+            <Textarea
+              id="deliveryTimeTextInput"
+              value={deliveryTimeText}
+              onChange={(event) => setDeliveryTimeText(event.target.value)}
+              maxLength={PURCHASE_CONTRACT_FIELD_LIMITS.deliveryTimeText}
+              disabled={pending}
+            />
+          </FormField>
+        )}
         <FormField label="收货地址" error={state.fieldErrors?.deliveryAddress} wide>
           <ContractTextarea name="deliveryAddress" value={initialValues.deliveryAddress} disabled={pending} />
         </FormField>

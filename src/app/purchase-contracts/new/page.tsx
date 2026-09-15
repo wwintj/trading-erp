@@ -55,6 +55,7 @@ export default async function NewPurchaseContractPage() {
     companyId: options.companies[0]?.id ?? "",
     supplierId: options.suppliers[0]?.id ?? "",
     deliveryDate: null,
+    deliveryTimeText: null,
     deliveryAddress: null,
     deliveryContactName: null,
     deliveryContactPhone: null,

@@ -57,6 +57,9 @@ export default async function DashboardPage() {
               <Link href="/suppliers">供应商</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
+              <Link href="/customers">客户</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <Link href="/company">公司信息</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>

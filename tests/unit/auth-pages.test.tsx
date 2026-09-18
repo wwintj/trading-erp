@@ -146,6 +146,8 @@ describe("authentication pages", () => {
     expect(html).toContain("产品");
     expect(html).toContain('href="/suppliers"');
     expect(html).toContain("供应商");
+    expect(html).toContain('href="/customers"');
+    expect(html).toContain("客户");
     expect(html).toContain('href="/company"');
     expect(html).toContain("公司信息");
     expect(html).toContain('href="/account"');

@@ -141,6 +141,8 @@ describe("authentication pages", () => {
     expect(html).not.toContain("<dd>admin</dd>");
     expect(html).toContain("退出登录");
     expect(html).toContain('href="/purchase-contracts"');
+    expect(html).toContain('href="/sales-delivery-notes"');
+    expect(html).toContain("销售送货单");
     expect(html).toContain("采购合同");
     expect(html).toContain('href="/products"');
     expect(html).toContain("产品");

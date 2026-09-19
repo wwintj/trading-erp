@@ -92,6 +92,8 @@ model Company {
   updatedAt         DateTime @updatedAt
   purchaseContracts PurchaseContract[]
 
+  salesDeliveryNotes SalesDeliveryNote[]
+
   @@map("company")
 }
 
@@ -132,6 +134,8 @@ model Customer {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
+  salesDeliveryNotes SalesDeliveryNote[]
+
   @@map("customer")
 }
 
@@ -146,6 +150,8 @@ model Product {
   updatedAt     DateTime @updatedAt
   purchaseContractItems PurchaseContractItem[]
 
+  salesDeliveryNoteItems SalesDeliveryNoteItem[]
+
   @@map("product")
 }
 
@@ -153,6 +159,59 @@ enum PurchaseContractStatus {
   DRAFT
   FINAL
   CANCELLED
+}
+
+enum SalesDeliveryNoteStatus {
+  DRAFT
+  FINAL
+  CANCELLED
+}
+
+model SalesDeliveryNote {
+  id                   String                  @id @default(cuid())
+  deliveryNo           String                  @unique @db.VarChar(64)
+  status               SalesDeliveryNoteStatus @default(DRAFT)
+  deliveryDate         DateTime                @db.Date
+  companyId            String
+  customerId           String
+  customerPoNo         String?                 @map("customer_po_no") @db.VarChar(128)
+  senderLegalName      String                  @map("sender_legal_name") @db.VarChar(255)
+  senderContactName    String?                 @map("sender_contact_name") @db.VarChar(128)
+  senderPhone          String?                 @map("sender_phone") @db.VarChar(64)
+  senderAddress        String?                 @map("sender_address") @db.Text
+  customerLegalName    String                  @map("customer_legal_name") @db.VarChar(255)
+  deliveryContactName  String?                 @map("delivery_contact_name") @db.VarChar(128)
+  deliveryContactPhone String?                 @map("delivery_contact_phone") @db.VarChar(64)
+  deliveryAddress      String?                 @map("delivery_address") @db.Text
+  shippingMethod       String?                 @map("shipping_method") @db.VarChar(255)
+  logisticsCompany     String?                 @map("logistics_company") @db.VarChar(255)
+  trackingNo           String?                 @map("tracking_no") @db.VarChar(128)
+  notes                String?                 @db.Text
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  company              Company                 @relation(fields: [companyId], references: [id])
+  customer             Customer                @relation(fields: [customerId], references: [id])
+  items                SalesDeliveryNoteItem[]
+
+  @@map("sales_delivery_note")
+}
+
+model SalesDeliveryNoteItem {
+  id                  String            @id @default(cuid())
+  salesDeliveryNoteId String
+  productId           String
+  sortOrder           Int               @default(0)
+  productCode         String            @db.VarChar(64)
+  productName         String            @db.VarChar(255)
+  specification       String?           @db.VarChar(255)
+  unit                String            @db.VarChar(32)
+  quantity            Decimal           @db.Decimal(18, 3)
+  remark              String?           @db.Text
+  salesDeliveryNote   SalesDeliveryNote @relation(fields: [salesDeliveryNoteId], references: [id], onDelete: Cascade)
+  product             Product           @relation(fields: [productId], references: [id])
+
+  @@index([salesDeliveryNoteId, sortOrder])
+  @@map("sales_delivery_note_item")
 }
 
 model PurchaseContract {
